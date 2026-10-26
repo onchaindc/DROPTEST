@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+:root {
+  /* Paper — off-white research-terminal base */
+  --background: #f7f6f2;
+  --surface: #fdfdfb;
+  --surface-strong: #ffffff;
+  --hairline: #e3e0d8;
+  --ink: #16181d;
+  --ink-soft: #4a4f5a;
+  --ink-faint: #8a8d96;
+  --accent: #0f766e;   /* deep teal for verified/positive */
+  --amber: #b45309;    /* restrained warning */
+  --risk: #b91c1c;     /* restrained red risk */
+  --chart-grid: #eae7df;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-hairline: var(--hairline);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-amber: var(--amber);
+  --color-risk: var(--risk);
+  --color-chart-grid: var(--chart-grid);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--ink);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Numeric readouts always render on a tabular grid for terminal feel */
+.tabular {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
