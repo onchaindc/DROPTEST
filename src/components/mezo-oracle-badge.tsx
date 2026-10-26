@@ -1,92 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { createPublicClient, defineChain, http, parseAbi } from "viem";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { MEZO_TESTNET } from "@/lib/mezo/verified";
+import { type MezoNetwork } from "@/lib/mezo/verified";
+import { createMezoClient } from "@/lib/mezo/client";
+import { fetchBtcUsdPrice, type MezoReadClient, type OracleReading } from "@/lib/mezo/oracle";
 import { dateTime, timeAgo } from "@/lib/format";
 
-/**
- * Aggregator ABI slice, only what we need. `latestRoundData` on
- * Mezo's Skip BTC/USD feed returns the documented fields; we keep
- * answer, decimals, and updatedAt so the reader can judge freshness.
- */
-const AGGREGATOR_ABI = parseAbi([
-  "function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
-  "function decimals() view returns (uint8)",
-]);
-
-const mezoTestnet = defineChain({
-  id: MEZO_TESTNET.chainId,
-  name: "Mezo Testnet",
-  nativeCurrency: { name: "BTC", symbol: "BTC", decimals: 18 },
-  rpcUrls: { default: { http: [MEZO_TESTNET.rpc] } },
-  blockExplorers: {
-    default: { name: "Mezo Testnet Explorer", url: MEZO_TESTNET.explorer },
-  },
-});
-
-/**
- * A reading older than this is flagged as stale. The feed is supposed
- * to update every block, so a week-old answer on a paused testnet
- * should not look fresh to the user.
- */
-const STALE_MS = 2 * 60 * 60 * 1000;
-
-type OracleState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "ok"; priceUsd: number; roundId: bigint; blockNumber: number; updatedAtMs: number }
-  | { status: "error"; message: string };
-
-/** Read the documented Skip BTC/USD aggregator on Mezo testnet, read-only. */
-export async function fetchMezoBtcPriceAsync(): Promise<OracleState> {
-  try {
-    const client = createPublicClient({ chain: mezoTestnet, transport: http() });
-    const blockNumber = await client.getBlockNumber();
-    const [round, decimals] = await Promise.all([
-      client.readContract({
-        address: MEZO_TESTNET.btcUsdAggregator,
-        abi: AGGREGATOR_ABI,
-        functionName: "latestRoundData",
-      }),
-      client.readContract({
-        address: MEZO_TESTNET.btcUsdAggregator,
-        abi: AGGREGATOR_ABI,
-        functionName: "decimals",
-      }),
-    ]);
-    const [roundId, answer, , updatedAt] = round;
-    if (answer <= 0n) {
-      return { status: "error", message: "Oracle returned a non-positive answer." };
-    }
-    const priceUsd = Number(answer) / 10 ** Number(decimals);
-    const updatedAtMs = Number(updatedAt) * 1000;
-    if (!Number.isFinite(updatedAtMs) || updatedAtMs <= 0) {
-      return {
-        status: "ok",
-        priceUsd,
-        roundId,
-        blockNumber: Number(blockNumber),
-        updatedAtMs: Number.NaN,
-      };
-    }
-    return {
-      status: "ok",
-      priceUsd,
-      roundId,
-      blockNumber: Number(blockNumber),
-      updatedAtMs,
-    };
-  } catch (err) {
-    return {
-      status: "error",
-      message: err instanceof Error ? err.message.slice(0, 160) : "Unknown RPC error.",
-    };
-  }
-}
+type OracleState = { status: "idle" } | { status: "loading" } | { status: "settled"; reading: OracleReading };
 
 export interface OracleBadgeProps {
+  /** Network the read targets. Must come from a labelled selector. */
+  network: MezoNetwork;
   /**
    * Fires when a fresh oracle price has been read successfully. The
    * second argument is the round's updatedAt, so the lab can label a
@@ -97,11 +22,12 @@ export interface OracleBadgeProps {
 }
 
 /**
- * Live Mezo testnet BTC/USD read-out with explicit states: fresh,
- * stale, or failed. This card never invents a price; when the RPC is
- * unreachable it says so and the manual input keeps working.
+ * Live BTC/USD read-out from the documented Skip aggregator on the
+ * selected Mezo network, with explicit states: fresh, stale, or failed.
+ * The card never invents a price; when the RPC is unreachable it says
+ * so and the manual input keeps working.
  */
-export function MezoOracleBadge({ onPrice, className }: OracleBadgeProps) {
+export function MezoOracleBadge({ network, onPrice, className }: OracleBadgeProps) {
   const [state, setState] = useState<OracleState>({ status: "idle" });
   // Ticking clock so "x min ago" stays truthful while the page is open.
   // Reads only inside effects: a prerendered shell must not capture a
@@ -109,35 +35,36 @@ export function MezoOracleBadge({ onPrice, className }: OracleBadgeProps) {
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    // The relative-age label starts with the first tick; the mount read
-    // below already stamps now when it succeeds. Pre-rendering shells
-    // must not capture a build-time Date.now().
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
 
+  const client: MezoReadClient = useMemo(
+    () => createMezoClient(network),
+    [network],
+  );
+
   const refresh = useCallback(async () => {
     setState({ status: "loading" });
-    const next = await fetchMezoBtcPriceAsync();
-    setState(next);
+    const next = await fetchBtcUsdPrice(network, client);
+    setState({ status: "settled", reading: next });
     setNow(Date.now());
-    if (next.status === "ok") onPrice?.(next.priceUsd, next.updatedAtMs);
-  }, [onPrice]);
+    if (next.kind === "ok") onPrice?.(next.priceUsd, next.updatedAtMs);
+  }, [network, client, onPrice]);
 
   useEffect(() => {
-    // Single read on mount, deferred out of the render/effect phase; the
-    // refresh button serves later reads. Polling would just burn RPC calls.
+    // Reset happens inside the deferred read: an effect must not call
+    // setState synchronously.
     const t = setTimeout(() => {
+      setState({ status: "idle" });
       void refresh();
     }, 0);
     return () => clearTimeout(t);
   }, [refresh]);
 
-  const stale =
-    state.status === "ok" &&
-    now !== null &&
-    Number.isFinite(state.updatedAtMs) &&
-    now - state.updatedAtMs > STALE_MS;
+  const settled = state.status === "settled" ? state.reading : null;
+  const staleReading =
+    settled !== null && settled.kind === "ok" && settled.stale;
 
   return (
     <div
@@ -148,7 +75,7 @@ export function MezoOracleBadge({ onPrice, className }: OracleBadgeProps) {
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
-          Mezo testnet · BTC/USD
+          {network.label.split(" (")[0]} · BTC/USD
         </span>
         <button
           type="button"
@@ -161,42 +88,46 @@ export function MezoOracleBadge({ onPrice, className }: OracleBadgeProps) {
       {state.status === "idle" && (
         <p className="text-xs text-ink-faint">No reading yet.</p>
       )}
-      {state.status === "ok" && (
+      {state.status === "loading" && (
+        <p className="text-xs text-ink-faint">Calling the Skip aggregator…</p>
+      )}
+      {settled !== null && settled.kind === "ok" && (
         <>
           <p className="tabular text-sm text-ink-soft">
-            ${state.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            ${settled.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </p>
           <p className="text-[11px] text-ink-faint">
-            Round {String(state.roundId)} at block {state.blockNumber}.
+            Round {String(settled.roundId)} at block {settled.blockNumber}, chain id{" "}
+            {settled.chainId} (verified), decimals {settled.decimals}.
           </p>
           <p
             className={`text-[11px] ${
-              stale || !Number.isFinite(state.updatedAtMs) ? "text-amber" : "text-ink-faint"
+              staleReading ? "text-amber" : "text-ink-faint"
             }`}
           >
-            {Number.isFinite(state.updatedAtMs) && now !== null ? (
-              <>
-                Oracle last updated {dateTime(state.updatedAtMs)} ({timeAgo(state.updatedAtMs, now)}).
-                {stale && " This reading is stale. Check before trusting it."}
-              </>
-            ) : (
-              "The oracle did not report an update time for this round."
-            )}
+            Oracle last updated {dateTime(settled.updatedAtMs)}
+            {now !== null
+              ? ` (${timeAgo(settled.updatedAtMs, now)})`
+              : ""}
+            .
+            {staleReading && " This reading is stale. Do not treat it as live data."}
           </p>
         </>
       )}
-      {state.status === "error" && (
+      {settled !== null && settled.kind === "error" && (
         <p className="text-xs text-risk">
-          Oracle read failed ({state.message}). No price is invented; your manual
-          input still works.
+          Oracle read failed ({settled.stage}: {settled.message}). No price is invented;
+          your manual input still works.
         </p>
       )}
       <p className="text-[11px] leading-relaxed text-ink-faint">
-        Read-only call to the Skip aggregator{" "}
-        <code className="break-all tabular">{MEZO_TESTNET.btcUsdAggregator}</code> over{" "}
-        <code className="tabular">rpc.test.mezo.org</code>. Per Mezo docs, this feed
-        updates every block. Nothing else is fetched, and oracle values are always
-        shown separately from prices you type by hand.
+        Read-only calls to the Skip aggregator{" "}
+        <code className="break-all tabular">{network.contracts.btcUsdAggregator}</code> via{" "}
+        <code className="break-all tabular">{network.rpc}</code> after verifying the
+        connected chain id. Per Mezo docs this feed updates every block, and its{" "}
+        <code className="tabular">decimals()</code> value is read from the chain (18, not
+        Chainlink-typical 8). Nothing else is fetched, and oracle values are always shown
+        separately from prices you type by hand.
       </p>
     </div>
   );

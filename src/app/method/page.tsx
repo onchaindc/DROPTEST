@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import {
   INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT,
-  MEZO_TESTNET,
+  DEFAULT_MEZO_NETWORK as MEZO_NETWORK,
   SYSTEM_RECOVERY_MODE_TCR_PCT,
 } from "@/lib/mezo/verified";
 
@@ -35,9 +35,9 @@ const DOC_LINKS = [
     note: "The Skip BTC/USD aggregator address used for the read-only price call.",
   },
   {
-    label: "Mezo docs: testnet getting started",
-    href: "https://mezo.org/docs/developers/getting-started/",
-    note: "Chain id 31611, RPC, and explorer endpoints.",
+    label: "Mezo docs: getting started / connect",
+    href: "https://mezo.org/docs/users/getting-started/connect/",
+    note: "Mainnet chain id 31612, RPC, and explorer endpoints; testnet 31611 remains documented alongside.",
   },
   {
     label: "Older borrow blog (documented conflict)",
@@ -73,12 +73,12 @@ const adjustableAssumptions = [
   {
     value: "Spot BTC price",
     label: "You type it",
-    note: "Or sync it once from the read-only testnet oracle. The app never fetches prices in the background.",
+    note: "Or sync it once from the read-only mainnet oracle. The app never fetches prices in the background.",
   },
   {
     value: "Position size",
-    label: "You type it",
-    note: "Hypothetical BTC and debt amounts. Nothing is read from a wallet or a live protocol.",
+    label: "You type it — or load a live trove",
+    note: "Hypothetical amounts by default; the Stress Lab can also load a real open trove by public EVM address from the mainnet TroveManager, strictly read-only.",
   },
   {
     value: "Liquidation threshold",
@@ -275,28 +275,39 @@ export default function MethodPage() {
 
       {/* Oracle */}
       <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
-        <h2 className="text-lg font-semibold tracking-tight">Oracle source</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Live reads, read-only</h2>
         <p className="mt-3 max-w-2xl text-xs leading-relaxed text-ink-soft">
-          The one live integration is a read-only{" "}
-          <code className="tabular">latestRoundData()</code> call to the Skip
-          BTC/USD aggregator at{" "}
+          Two live integrations, both read-only eth_calls against{" "}
+          {MEZO_NETWORK.label} (chain id{" "}
+          <code className="tabular">{MEZO_NETWORK.chainId}</code>, RPC{" "}
+          <code className="break-all">{MEZO_NETWORK.rpc}</code>, all
+          addresses from the official docs and verified live before use):
+          the Skip BTC/USD aggregator{" "}
           <code className="break-all tabular">
-            {MEZO_TESTNET.btcUsdAggregator}
+            {MEZO_NETWORK.contracts.btcUsdAggregator}
           </code>{" "}
-          on Mezo testnet (chain id{" "}
-          <code className="tabular">{MEZO_TESTNET.chainId}</code>, RPC{" "}
-          <code className="break-all">rpc.test.mezo.org</code>). The call
-          reads, it never writes: no wallet, no key, no signing.
+          via <code className="tabular">latestRoundData()</code> and{" "}
+          <code className="tabular">decimals()</code>, and the TroveManager proxy{" "}
+          <code className="break-all tabular">
+            {MEZO_NETWORK.contracts.troveManager}
+          </code>{" "}
+          via <code className="tabular">getTroveStatus(address)</code>,{" "}
+          <code className="tabular">getEntireDebtAndColl(address)</code>,{" "}
+          <code className="tabular">Troves(address)</code> and{" "}
+          <code className="tabular">MCR()</code>. Nothing is ever written:
+          no wallet, no key, no signing.
         </p>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-relaxed text-ink-soft">
           <li>
             The reading shows its own timestamp, so you can judge how fresh it
-            is. Readings older than two hours are flagged as stale.
+            is. Per the docs the feed updates every block; readings older
+            than ten minutes are flagged as stale.
           </li>
           <li>
-            If the RPC is unreachable or returns junk, the app reports the
-            error and invents no price. Manual prices you type are labelled as
-            manual and never silently replaced.
+            If the RPC is unreachable, the chain id mismatches, or the
+            contracts return junk, the app reports the error and invents no
+            price or position. Manual prices you type are labelled as hand
+            entry and never silently replaced.
           </li>
           <li>
             The oracle price and any shock scenarios are separate: shocks

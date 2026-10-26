@@ -7,10 +7,13 @@ DROPTEST is a Bitcoin collateral risk research tool for the [Mezo](https://mezo.
 ## Highlights
 
 - **Tested pure risk engine** (`src/lib/engine/risk.ts`): collateral ratio, LTV, liquidation price, drop to liquidation, preset shocks, compounded crash timelines, and reverse stress testing (pick a ratio target, solve for the price). 36 unit tests in `src/lib/engine/` cover the math and its boundaries, including the exact "falls below 110%" threshold wording.
+- **Tested mainnet integration** (`src/lib/mezo/`): 47 unit tests cover network selection and chain-mismatch guarding, oracle price/decimal/update-time validation and freshness/staleness, trove decoding (`getEntireDebtAndColl` + `Troves` struct), unit conversions, pending-reward semantics, empty positions, and RPC failures; a further 11 tests span the risk engine's scenario paths. Explicit live checks against real mainnet data live in `npx vitest run src/lib/mezo/live.e2e.check.ts` and `node scripts/mezo-live-check.mjs` (network-gated, never run by `npm test`).
 - **Scenario Studio** (`/studio`): compare up to three named hypothetical price paths with gradual decline, sudden crash, and prolonged bear market presets. Saved in local storage with reset and delete controls.
+- **Live Position Watch** (`/lab`): enter any public EVM address and read its real open trove from the Mezo mainnet TroveManager proxy — collateral, principal, accrued interest (incl. accrued-to-current-block), pending redistributed rewards, and the per-trove fixed interest rate via `getEntireDebtAndColl(address)`, `getTroveStatus(address)` and `Troves(address)`. Strictly read-only; an empty address is reported as "no position", and RPC/decode errors are never shown as positions. A fully loaded position can be copied into the hypothetical inputs with on-chain/calculated labels.
 - **Reverse stress testing**: enter any collateral ratio target and read the BTC price that reaches it, clearly labelled as a user what-if distinct from Mezo's documented 110% threshold.
 - **Printable reports** (`/report`): a clean print-ready report with position inputs, assumptions, results, charts, sources, and generation time. No private data is included; save to PDF via the browser print dialog.
-- **Read-only Mezo testnet oracle**: one live call, `latestRoundData()` on the Skip BTC/USD aggregator via viem. No wallet, no keys, no signing. The reading shows its update time and a stale flag; failures surface honestly and nothing is fabricated.
+- **Read-only Mezo mainnet oracle**: the documented Skip BTC/USD aggregator via viem (`latestRoundData()` + `decimals()` read from the chain — the deployed feed uses 18 decimals, not Chainlink-typical 8), after verifying the connected chain id (31612). No wallet, no keys, no signing. The reading shows its update time and a stale flag (the feed updates every block per the docs; >10 min is flagged); failures surface honestly and nothing is fabricated.
+- **Mainnet is the default network** (`src/lib/mezo/verified.ts`): Mezo mainnet — chain id 31612, RPC `https://mezo-mainnet.boar.network`, explorer `explorer.mezo.org`, Skip aggregator `0x7b7c00…0015`, TroveManager proxy `0x94AfB503…93c193`, PriceFeed `0xc5aC5A88…fFcA88`, MUSD `0xdD468A1D…F186`. Testnet (31611) remains available only through an explicitly labelled network selector, so testnet data can never be mixed into a mainnet read. Every address and ABI was verified against the live chain before shipping (`node scripts/mezo-live-check.mjs`); the live check found a real active trove and confirmed `MCR()` = 1.1e18, i.e. the documented 110% per-trove threshold (with the 150% system Recovery Mode TCR kept separate).
 - **Documented protocol assumptions**: parameters pinned to official Mezo docs with inline citations; anything the docs do not state is a labelled, user-tunable assumption.
 
 ## Stack
@@ -27,7 +30,7 @@ npm run dev   # binds 0.0.0.0:${PORT:-3000}
 ## Test / verify
 
 ```bash
-npm test        # vitest, 47 unit tests (engine, price paths, report snapshot)
+npm test        # vitest, 94 unit tests (engine, paths, report, network, oracle, trove decoding)
 npx tsc --noEmit
 ```
 

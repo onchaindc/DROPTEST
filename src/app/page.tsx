@@ -3,7 +3,7 @@ import Link from "next/link";
 import { MezoOracleBadge } from "@/components/mezo-oracle-badge";
 import {
   INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT,
-  MEZO_TESTNET,
+  DEFAULT_MEZO_NETWORK as MEZO_NETWORK,
   SYSTEM_RECOVERY_MODE_TCR_PCT,
 } from "@/lib/mezo/verified";
 
@@ -32,7 +32,7 @@ const steps = [
   {
     n: "01",
     title: "Define a hypothetical position",
-    body: "Enter BTC collateral, total MUSD debt, and a spot BTC price. Everything runs in your browser. No wallet, no live position, no signed transaction.",
+    body: "Enter BTC collateral, total MUSD debt, and a spot BTC price — or load a real trove by public address, read-only, right in the lab. Everything runs in your browser. No wallet, no signed transaction.",
   },
   {
     n: "02",
@@ -111,7 +111,7 @@ export default function Home() {
             {[
               [`${INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT}%`, "Documented liquidation threshold"],
               ["3", "Compared price paths, plus shocks"],
-              ["1", "Live oracle read on Mezo testnet"],
+              ["2", "Live read flows: oracle + open troves"],
               ["0", "Wallet connections or invented data"],
             ].map(([k, v]) => (
               <div key={v} className="bg-surface-strong px-3 py-3">
@@ -211,34 +211,39 @@ export default function Home() {
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1fr_380px]">
           <div>
             <h2 className="text-2xl font-semibold tracking-tight">
-              One live call, read-only
+              Live reads, read-only
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
-              DROPTEST makes exactly one network call: a read-only{" "}
-              <code className="tabular">latestRoundData()</code> against the
-              Skip BTC/USD aggregator that Mezo&apos;s oracle documentation
-              publishes for its testnet. It runs through viem with no wallet,
-              no key, and no signing. One click syncs the spot price in the
-              stress lab, and the reading is labelled as an oracle value so
-              it never blends into prices you type by hand. If the call
-              fails, the tool tells you instead of guessing.
+              DROPTEST reads live on{" "}
+              {MEZO_NETWORK.label} (chain id{" "}
+              <code className="tabular">{MEZO_NETWORK.chainId}</code>): the
+              documented Skip BTC/USD oracle{" "}
+              <code className="tabular">latestRoundData()</code>, and — in the
+              stress lab — open troves by public address on the TroveManager
+              proxy. Both are plain read-only eth_calls through viem: no
+              wallet, no key, no signing. One click syncs the spot price, and
+              reading a real position loads it into the hypothetical inputs
+              with on-chain/calculated labels so the two never blend. If a
+              call fails, the tool tells you instead of guessing.
             </p>
             <ul className="mt-6 space-y-2 text-sm leading-relaxed text-ink-soft">
               <li className="flex gap-3">
                 <span className="tabular text-ink-faint">01</span>
-                Mezo testnet, chain id{" "}
-                <code className="tabular">{MEZO_TESTNET.chainId}</code>, RPC{" "}
-                <code className="break-all">rpc.test.mezo.org</code>
+                {MEZO_NETWORK.label}, chain id{" "}
+                <code className="tabular">{MEZO_NETWORK.chainId}</code>, RPC{" "}
+                <code className="break-all">mezo-mainnet.boar.network</code>
               </li>
               <li className="flex gap-3">
                 <span className="tabular text-ink-faint">02</span>
                 Skip BTC/USD aggregator,{" "}
-                <code className="break-all tabular">{MEZO_TESTNET.btcUsdAggregator}</code>
+                <code className="break-all tabular">{MEZO_NETWORK.contracts.btcUsdAggregator}</code>
               </li>
               <li className="flex gap-3">
                 <span className="tabular text-ink-faint">03</span>
-                MUSD on testnet,{" "}
-                <code className="break-all tabular">{MEZO_TESTNET.musd}</code>
+                TroveManager proxy{" "}
+                <code className="break-all tabular">{MEZO_NETWORK.contracts.troveManager}</code>{" "}
+                and MUSD{" "}
+                <code className="break-all tabular">{MEZO_NETWORK.contracts.musd}</code>
               </li>
             </ul>
             <Link
@@ -249,7 +254,10 @@ export default function Home() {
             </Link>
           </div>
           <div className="self-start">
-            <MezoOracleBadge className="rounded-sm border border-hairline bg-surface-strong p-4" />
+            <MezoOracleBadge
+              network={MEZO_NETWORK}
+              className="rounded-sm border border-hairline bg-surface-strong p-4"
+            />
           </div>
         </div>
       </section>

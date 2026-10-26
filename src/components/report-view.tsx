@@ -402,8 +402,11 @@ function ReportContent({
             </li>
             <li>
               Prices: the spot price is either typed by hand or read once from
-              the documented read-only Mezo testnet oracle. No other live data
-              is used.
+              the documented read-only Mezo mainnet oracle. When a position is
+              loaded from the live TroveManager, its collateral and debt are
+              on-chain values fetched read-only by public address; every ratio,
+              liquidation price, and scenario outcome is calculated. No wallet
+              connection or signing is used.
             </li>
           </ul>
         </section>

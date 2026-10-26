@@ -21,11 +21,17 @@ import {
 import {
   DOC_CONFLICT_NOTE,
   INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT,
-  MEZO_TESTNET,
+  DEFAULT_MEZO_NETWORK,
+  MEZO_NETWORKS,
+  type MezoNetwork,
 } from "@/lib/mezo/verified";
 import { pct as fmtPct, ratio as fmtRatio, usd } from "@/lib/format";
 import { RatioCurve, ScenarioBars, TimelineChart } from "@/components/charts";
 import { MezoOracleBadge } from "@/components/mezo-oracle-badge";
+import {
+  LivePositionWatch,
+  type FilledLivePosition,
+} from "@/components/live-position-watch";
 import { saveReportSnapshot, type ReportSnapshot } from "@/lib/report";
 import type { LabInputs } from "@/lib/engine/scenarios";
 
@@ -91,7 +97,7 @@ const ASSUMPTIONS = [
   },
   {
     title: "What this tool is not",
-    body: "DROPTEST runs hypothetical positions only. It never connects to a wallet, never reads live user troves, and produces no signed transactions. The single live integration is a read-only BTC/USD price request to the testnet oracle Mezo documents.",
+    body: "DROPTEST never connects to a wallet and never signs anything: it cannot borrow, repay, or approve. Live reads are strictly read-only: an on-chain BTC/USD price and, on the Stress Lab, an open trove fetched by public address from the TroveManager proxy. All scenario math is client-side, and loaded positions always carry on-chain/calculated labels.",
     source: undefined,
   },
 ];
@@ -113,6 +119,9 @@ export function RiskLab() {
   );
   const [targetRatioInput, setTargetRatioInput] = useState("130");
   const [spotSource, setSpotSource] = useState<"manual" | "oracle">("manual");
+  // Mainnet is the production network; testnet stays reachable only
+  // through this explicitly labelled selector.
+  const [network, setNetwork] = useState<MezoNetwork>(DEFAULT_MEZO_NETWORK);
 
   const parsed = useMemo<{ fields: ParsedInputs; threshold: number }>(() => ({
     fields: {
@@ -232,6 +241,22 @@ export function RiskLab() {
     setSpotSource("oracle");
   }, [setField]);
 
+  /**
+   * Copy a fully loaded live trove into the hypothetical inputs so the
+   * existing risk engine and Stress Lab run unchanged on real data.
+   * The labels below make clear those three numbers then contain live
+   * on-chain values, while every downstream metric is calculated.
+   */
+  const fillFromLive = useCallback((filled: FilledLivePosition) => {
+    setFields({
+      btcCollateral: String(Math.round(filled.input.btcCollateral * 1e8) / 1e8),
+      musdDebt: String(Math.round(filled.input.musdDebt * 100) / 100),
+      btcPriceUsd: String(Math.round(filled.input.btcPriceUsd * 100) / 100),
+    });
+    setSpotSource("oracle");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
   const reset = useCallback(() => {
     setFields({
       btcCollateral: String(DEFAULT_LAB.btcCollateral),
@@ -348,7 +373,7 @@ export function RiskLab() {
           <p className="mt-2 text-[11px] text-ink-faint">
             Spot price:
             {spotSource === "oracle"
-              ? " last synced from the Mezo testnet oracle"
+              ? ` last synced from the ${network.label.split(" (")[0]} oracle`
               : " entered by hand"}
           </p>
 
@@ -689,30 +714,58 @@ export function RiskLab() {
 
       {/* Mezo integration */}
       <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
-        <h2 className="mb-1 text-sm font-semibold text-ink">
-          Oracle sync, read-only
-        </h2>
-        <p className="mb-4 max-w-2xl text-xs leading-relaxed text-ink-soft">
-          The only live call in DROPTEST is documented by Mezo and read-only.
-          On success the price input takes the testnet oracle value and the
-          page labels it as an oracle reading. If the call fails the manual
-          price you typed stays in place.
-        </p>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="mb-1 text-sm font-semibold text-ink">
+              Live Mezo reads, read-only
+            </h2>
+            <p className="max-w-2xl text-xs leading-relaxed text-ink-soft">
+              Two live read flows, both strictly read-only: the documented Skip
+              BTC/USD oracle, and a trove lookup by public address on the
+              TroveManager proxy. On success the price input takes the oracle
+              value and the page labels it as an oracle reading. If a call
+              fails or the connected chain id does not match, the tool says so
+              and invents nothing.
+            </p>
+          </div>
+          <label className="flex shrink-0 items-center gap-2">
+            <span className="text-[11px] uppercase tracking-widest text-ink-faint">
+              Network
+            </span>
+            <select
+              value={network.id}
+              onChange={(e) => {
+                const next = MEZO_NETWORKS.find((n) => n.id === e.target.value);
+                if (next) setNetwork(next);
+              }}
+              className="rounded-sm border border-hairline bg-background px-2 py-1.5 text-xs text-ink outline-none focus-within:border-ink"
+              aria-label="Mezo network for live reads"
+            >
+              {MEZO_NETWORKS.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <MezoOracleBadge onPrice={syncFromOracle} />
-          <div className="border border-hairline bg-background p-3 text-xs leading-relaxed text-ink-faint">
+          <MezoOracleBadge network={network} onPrice={syncFromOracle} />
+          <LivePositionWatch network={network} onFill={fillFromLive} />
+        </div>
+        <div className="flex flex-col gap-3 border border-hairline bg-background p-3 text-xs leading-relaxed text-ink-faint">
             <p>
-              Network: Mezo Testnet, chain id{" "}
-              <code className="tabular">{MEZO_TESTNET.chainId}</code>, RPC{" "}
-              <code className="break-all">rpc.test.mezo.org</code>. Values
-              from Mezo&apos;s official developer docs.
+              Network: {network.label}, chain id{" "}
+              <code className="tabular">{network.chainId}</code>, RPC{" "}
+              <code className="break-all">{network.rpc}</code>. Values from
+              Mezo&apos;s official developer docs, verified live before use.
             </p>
             <p className="mt-2">
-              MUSD on testnet:{" "}
-              <code className="break-all tabular">{MEZO_TESTNET.musd}</code>{" "}
+              MUSD:{" "}
+              <code className="break-all tabular">{network.contracts.musd}</code>{" "}
               (18 decimals).{" "}
               <a
-                href={MEZO_TESTNET.explorer}
+                href={network.explorer}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-accent underline underline-offset-2"
@@ -722,10 +775,11 @@ export function RiskLab() {
               .
             </p>
             <p className="mt-2">
-              No wallet connection, no transaction signing, no live position
-              reads. Simulations stay client-side by design.
+              No wallet connection, no transaction signing, no borrowing, no
+              repayment, no approvals. Everything here is read-only by design;
+              the position you load simply replaces the three hypothetical
+              inputs and every downstream number stays calculated.
             </p>
-          </div>
         </div>
       </section>
 
