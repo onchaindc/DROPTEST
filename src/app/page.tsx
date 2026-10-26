@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { MezoOracleBadge } from "@/components/mezo-oracle-badge";
+import { LivePositionWatch } from "@/components/live-position-watch";
 import {
   INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT,
   DEFAULT_MEZO_NETWORK as MEZO_NETWORK,
@@ -253,11 +254,12 @@ export default function Home() {
               Open the stress lab
             </Link>
           </div>
-          <div className="self-start">
+          <div className="flex flex-col gap-5 self-start">
             <MezoOracleBadge
               network={MEZO_NETWORK}
               className="rounded-sm border border-hairline bg-surface-strong p-4"
             />
+            <LivePositionWatch network={MEZO_NETWORK} />
           </div>
         </div>
       </section>

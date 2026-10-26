@@ -13,6 +13,7 @@ DROPTEST is a Bitcoin collateral risk research tool for the [Mezo](https://mezo.
 - **Reverse stress testing**: enter any collateral ratio target and read the BTC price that reaches it, clearly labelled as a user what-if distinct from Mezo's documented 110% threshold.
 - **Printable reports** (`/report`): a clean print-ready report with position inputs, assumptions, results, charts, sources, and generation time. No private data is included; save to PDF via the browser print dialog.
 - **Read-only Mezo mainnet oracle**: the documented Skip BTC/USD aggregator via viem (`latestRoundData()` + `decimals()` read from the chain — the deployed feed uses 18 decimals, not Chainlink-typical 8), after verifying the connected chain id (31612). No wallet, no keys, no signing. The reading shows its update time and a stale flag (the feed updates every block per the docs; >10 min is flagged); failures surface honestly and nothing is fabricated.
+- **Live reads surfaced on the overview**: the landing page carries the oracle badge and the Live Position Watch (mainnet by default) so the read-only flows are visible without opening the lab; the full experience with network selection sits in `/lab`.
 - **Mainnet is the default network** (`src/lib/mezo/verified.ts`): Mezo mainnet — chain id 31612, RPC `https://mezo-mainnet.boar.network`, explorer `explorer.mezo.org`, Skip aggregator `0x7b7c00…0015`, TroveManager proxy `0x94AfB503…93c193`, PriceFeed `0xc5aC5A88…fFcA88`, MUSD `0xdD468A1D…F186`. Testnet (31611) remains available only through an explicitly labelled network selector, so testnet data can never be mixed into a mainnet read. Every address and ABI was verified against the live chain before shipping (`node scripts/mezo-live-check.mjs`); the live check found a real active trove and confirmed `MCR()` = 1.1e18, i.e. the documented 110% per-trove threshold (with the 150% system Recovery Mode TCR kept separate).
 - **Documented protocol assumptions**: parameters pinned to official Mezo docs with inline citations; anything the docs do not state is a labelled, user-tunable assumption.
 
@@ -36,8 +37,8 @@ npx tsc --noEmit
 
 ## Sections
 
-- `/` Overview: what the tool does, verified parameters, the oracle integration.
-- `/lab` Stress Lab: position inputs, threshold assumption, ratio curve, crash timeline, preset and custom shocks, reverse stress test, oracle sync, printable report.
+- `/` Overview: what the tool does, verified parameters, the oracle integration, and the live read tools (oracle badge + trove lookup, read-only).
+- `/lab` Stress Lab: a tabbed workspace — **Position** (inputs, threshold assumption, headline metrics), **Charts** (ratio curve, crash timeline), **Shocks & reverse** (custom shock, preset ladder, reverse stress test), **Live reads** (oracle sync, live trove lookup by public address, network selector), and **Assumptions** (documented parameters and sources) — printable report from the header.
 - `/studio` Scenario Studio: up to three named price paths compared on one chart, with per-path lowest ratio, first threshold breach, and ending collateral value.
 - `/method` Research & Methodology: formulas, recovered documented wording, Recovery Mode distinction, liquidation mechanics, interest limitations, oracle source, and full citation list.
 - `/report` Printable report generated from the lab or studio.

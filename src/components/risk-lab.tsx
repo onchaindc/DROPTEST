@@ -105,6 +105,100 @@ const ASSUMPTIONS = [
 const REVERSE_TARGET_MIN_PCT = 100;
 const REVERSE_TARGET_MAX_PCT = 500;
 
+type TabId = "position" | "charts" | "shocks" | "live" | "assumptions";
+
+const TABS: { id: TabId; label: string; blurb: string }[] = [
+  {
+    id: "position",
+    label: "Position",
+    blurb: "The three inputs, the threshold slider, and the headline metrics.",
+  },
+  {
+    id: "charts",
+    label: "Charts",
+    blurb: "Collateral ratio vs price, and the staged crash timeline.",
+  },
+  {
+    id: "shocks",
+    label: "Shocks & reverse",
+    blurb: "Custom shock, preset severity ladder, and the reverse stress test.",
+  },
+  {
+    id: "live",
+    label: "Live reads",
+    blurb: "Oracle price sync and read-only live trove lookup by address.",
+  },
+  {
+    id: "assumptions",
+    label: "Assumptions",
+    blurb: "What is documented, what is assumed, and where each number comes from.",
+  },
+];
+
+function LabTabNav({
+  tab,
+  onTab,
+  className,
+}: {
+  tab: TabId;
+  onTab: (tab: TabId) => void;
+  className?: string;
+}) {
+  return (
+    <nav aria-label="Lab sections" className={className}>
+      <div
+        role="tablist"
+        aria-label="Lab sections"
+        className="flex flex-wrap gap-0.5 border-b border-hairline"
+      >
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            data-tab={t.id}
+            onClick={() => onTab(t.id)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+              tab === t.id
+                ? "border-ink font-medium text-ink"
+                : "border-transparent text-ink-soft hover:text-ink"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] text-ink-faint">
+        {TABS.find((t) => t.id === tab)?.blurb}
+      </p>
+    </nav>
+  );
+}
+
+function SectionMissingState({
+  onOpenPosition,
+}: {
+  onOpenPosition: () => void;
+}) {
+  return (
+    <div className="border border-hairline bg-surface-strong p-5 text-sm sm:p-6">
+      <p className="font-medium text-ink">This section needs a complete position.</p>
+      <p className="mt-1 text-xs leading-relaxed text-ink-soft">
+        Switch to the{" "}
+        <button
+          type="button"
+          onClick={onOpenPosition}
+          className="text-accent underline underline-offset-2"
+        >
+          Position
+        </button>{" "}
+        tab and fill BTC collateral, MUSD debt, and the spot price.
+      </p>
+    </div>
+  );
+}
+
 export function RiskLab() {
   const router = useRouter();
   const [fields, setFields] = useState<Record<FieldKey, string>>({
@@ -122,6 +216,9 @@ export function RiskLab() {
   // Mainnet is the production network; testnet stays reachable only
   // through this explicitly labelled selector.
   const [network, setNetwork] = useState<MezoNetwork>(DEFAULT_MEZO_NETWORK);
+  // The lab is one stateful engine rendered across tabbed sections, so
+  // an input change on one tab updates every other tab instantly.
+  const [tab, setTab] = useState<TabId>("position");
 
   const parsed = useMemo<{ fields: ParsedInputs; threshold: number }>(() => ({
     fields: {
@@ -254,6 +351,7 @@ export function RiskLab() {
       btcPriceUsd: String(Math.round(filled.input.btcPriceUsd * 100) / 100),
     });
     setSpotSource("oracle");
+    setTab("position");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
@@ -297,7 +395,7 @@ export function RiskLab() {
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
             Stress Lab
           </h1>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
             A hypothetical BTC/MUSD position under price shocks. Parameters
             follow official Mezo documentation, and nothing you enter here
             touches a live position.
@@ -322,7 +420,9 @@ export function RiskLab() {
         </div>
       </div>
 
-      {invalidFields.length > 0 && (
+      <LabTabNav tab={tab} onTab={setTab} className="mb-8 w-full max-w-3xl" />
+
+      {tab === "position" && invalidFields.length > 0 && (
         <div className="mb-8 rounded-sm border border-amber/40 bg-amber/5 px-4 py-3 text-sm text-amber">
           Fix these inputs to recalculate:{" "}
           {invalidFields.map((k) => fieldMeta[k].label).join(", ")} must be
@@ -330,8 +430,8 @@ export function RiskLab() {
         </div>
       )}
 
-      {/* Position inputs */}
-      <section className="mb-12 grid gap-6 md:grid-cols-[1fr_320px]">
+      {tab === "position" && (
+        <section className="grid gap-6 md:grid-cols-[1fr_320px]">
         <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
           <h2 className="mb-1 text-sm font-semibold text-ink">
             Hypothetical position
@@ -446,11 +546,11 @@ export function RiskLab() {
             </p>
           )}
         </div>
-      </section>
+        </section>
+      )}
 
-      {/* Charts row */}
-      {metrics && validInputs && (
-        <section className="mb-12 grid gap-6 lg:grid-cols-2">
+      {tab === "charts" && metrics && validInputs && (
+        <section className="grid gap-6 lg:grid-cols-2">
           <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
             <h2 className="mb-1 text-sm font-semibold text-ink">
               Collateral ratio vs BTC price
@@ -528,9 +628,12 @@ export function RiskLab() {
         </section>
       )}
 
-      {/* Custom shock + presets */}
-      {validInputs && (
-        <section className="mb-12 grid gap-6 lg:grid-cols-[340px_1fr]">
+      {tab === "charts" && !(metrics && validInputs) && (
+        <SectionMissingState onOpenPosition={() => setTab("position")} />
+      )}
+
+      {tab === "shocks" && validInputs && (
+        <section className="grid gap-6 lg:grid-cols-[340px_1fr]">
           <div className="flex flex-col gap-4 border border-hairline bg-surface-strong p-4 sm:p-6">
             <h2 className="text-sm font-semibold text-ink">One custom shock</h2>
             <label className="flex flex-col gap-1.5">
@@ -712,8 +815,12 @@ export function RiskLab() {
         </section>
       )}
 
-      {/* Mezo integration */}
-      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+      {tab === "shocks" && !validInputs && (
+        <SectionMissingState onOpenPosition={() => setTab("position")} />
+      )}
+
+      {tab === "live" && (
+        <section className="border border-hairline bg-surface-strong p-4 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="mb-1 text-sm font-semibold text-ink">
@@ -782,9 +889,10 @@ export function RiskLab() {
             </p>
         </div>
       </section>
+      )}
 
-      {/* Assumptions */}
-      <section className="border border-hairline bg-surface-strong p-4 sm:p-6">
+      {tab === "assumptions" && (
+        <section className="border border-hairline bg-surface-strong p-4 sm:p-6">
         <h2 className="mb-1 text-sm font-semibold text-ink">
           Assumptions and sources
         </h2>
@@ -814,10 +922,11 @@ export function RiskLab() {
             </div>
           ))}
         </div>
-      </section>
+        </section>
+      )}
 
-      {metrics === null && invalidFields.length === 0 && (
-        <p className="mt-6 text-sm text-ink-faint">
+      {tab === "position" && metrics === null && invalidFields.length === 0 && (
+        <p className="text-sm text-ink-faint">
           Position incomplete. All three inputs must be greater than zero for
           the model to run.
         </p>
