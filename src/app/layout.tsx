@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 
 import { SiteNav } from "@/components/site-nav";
@@ -33,6 +34,20 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <div className="flex-1">{children}</div>
         <footer className="no-print border-t border-hairline">
           <div className="mx-auto max-w-6xl px-4 py-8 text-xs leading-relaxed text-ink-faint sm:px-6">
+            <nav
+              aria-label="Tools"
+              className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-ink-soft"
+            >
+              <Link href="/lab" className="transition-colors hover:text-ink">
+                Stress Lab
+              </Link>
+              <Link href="/studio" className="transition-colors hover:text-ink">
+                Scenario Studio
+              </Link>
+              <Link href="/method" className="transition-colors hover:text-ink">
+                Research &amp; Methodology
+              </Link>
+            </nav>
             <p>
               DROPTEST models hypothetical positions. It does not connect to
               wallets, read live borrows, or give financial advice. Protocol
