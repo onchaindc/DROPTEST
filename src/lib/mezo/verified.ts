@@ -30,7 +30,7 @@ export const SYSTEM_RECOVERY_MODE_TCR_PCT = 150;
 /**
  * The docs do not state a separate, named borrower-facing liquidation
  * penalty; the 0.5% figure below is a liquidator reward, not a
- * borrower penalty.surf We surface this explicitly in the assumptions
+ * borrower penalty. We surface this explicitly in the assumptions
  * panel instead of inventing a number.
  */
 export const NO_DOCUMENTED_LIQUIDATION_PENALTY = true;

@@ -7,21 +7,42 @@ import {
   SYSTEM_RECOVERY_MODE_TCR_PCT,
 } from "@/lib/mezo/verified";
 
+const sections = [
+  {
+    href: "/lab",
+    title: "Stress Lab",
+    body: "Enter a hypothetical position, drop the Bitcoin price, and read the collateral ratio, liquidation price, and remaining headroom for each shock.",
+    cta: "Open the stress lab",
+  },
+  {
+    href: "/studio",
+    title: "Scenario Studio",
+    body: "Compare up to three named price paths side by side. Gradual decline, sudden crash, and prolonged bear market presets, with your own edits.",
+    cta: "Compare scenarios",
+  },
+  {
+    href: "/method",
+    title: "Research & Methodology",
+    body: "The formulas behind the numbers, the documented 110% liquidation threshold, Recovery Mode, liquidation mechanics, and every source we cite.",
+    cta: "How the model works",
+  },
+];
+
 const steps = [
   {
     n: "01",
     title: "Define a hypothetical position",
-    body: "Enter BTC collateral, total MUSD debt, and a spot BTC price. Everything is client-side — no wallet, no live position, no signed transaction.",
+    body: "Enter BTC collateral, total MUSD debt, and a spot BTC price. Everything runs in your browser. No wallet, no live position, no signed transaction.",
   },
   {
     n: "02",
     title: "Shock the price",
-    body: "Drag a user-defined crash, load staged timelines, or compare preset severities from a modest rotation to a tail event. Every number recomputes live.",
+    body: "Drag a custom crash, load preset shocks, or walk a staged timeline. You can also invert the question: pick a collateral ratio and solve for the price that hits it.",
   },
   {
     n: "03",
     title: "Read the risk",
-    body: "Collateral ratio, LTV, the exact liquidation price, and how much further each scenario can fall before the position crosses the threshold.",
+    body: "The engine returns the collateral ratio, LTV, the exact liquidation price, and how much further each scenario can fall before the position crosses the threshold.",
   },
 ];
 
@@ -29,25 +50,25 @@ const verified = [
   {
     k: `${INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT}%`,
     label: "Individual liquidation threshold",
-    note: "A trove is liquidatable when its collateral ratio falls below this — per Mezo's developer guide.",
+    note: "A trove is liquidatable when its collateral ratio falls below this. Source: Mezo developer guide.",
     href: "https://mezo.org/docs/developers/musd/",
   },
   {
     k: `${SYSTEM_RECOVERY_MODE_TCR_PCT}%`,
     label: "Recovery Mode trigger (system TCR)",
-    note: "A system-wide total-collateral-ratio trigger, documented separately from the per-position threshold.",
+    note: "A system-wide total collateral ratio trigger, separate from the per-position threshold.",
     href: "https://github.com/mezo-org/musd/blob/main/docs/README.md",
   },
   {
     k: "0.5% + 200 MUSD",
-    label: "Liquidator reward & gas compensation",
-    note: "The Stability Pool burns debt against seized collateral — no residual returned to the borrower in our model.",
+    label: "Liquidator reward and gas compensation",
+    note: "The Stability Pool burns debt against seized collateral. The borrower is modelled as keeping nothing from liquidation.",
     href: "https://github.com/mezo-org/musd/blob/main/docs/README.md",
   },
   {
-    k: "1–5%",
+    k: "1 to 5%",
     label: "Documented initial interest range",
-    note: "Rates are not published beyond this range, so DROPTEST keeps entered debt static instead of inventing accrual.",
+    note: "The current rate is not published, so the calculator keeps your entered debt static instead of guessing accrual.",
     href: "https://mezo.org/docs/users/borrow/mint-musd/",
   },
 ];
@@ -57,40 +78,41 @@ export default function Home() {
     <main>
       {/* Hero */}
       <section className="border-b border-hairline">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-          <p className="mb-4 inline-flex items-center gap-2 rounded-sm border border-hairline bg-surface-strong px-2.5 py-1 text-[11px] font-medium uppercase tracking-widest text-ink-faint">
-            Mezo buildathon · BTC × MUSD
-          </p>
-          <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
-            Stress-test a BTC-backed MUSD loan
-            <span className="text-ink-faint"> before the market does it for you.</span>
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
+          <h1 className="max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl">
+            Know where your position breaks.
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-relaxed text-ink-soft sm:text-lg">
-            DROPTEST is a risk-notation desk for the Mezo ecosystem. Model a
-            hypothetical BTC-collateral position, crash the price, and see
-            exactly where your collateral ratio stands — down to the dollar at
-            which the position becomes liquidatable.
+            See how a fall in Bitcoin&apos;s price affects a BTC-backed MUSD
+            loan. Test different crash scenarios, find your liquidation price,
+            and understand how much room your collateral has left.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               href="/lab"
               className="w-fit rounded-sm bg-ink px-5 py-3 text-sm font-medium text-background transition-colors hover:bg-ink-soft"
             >
-              Run a stress test →
+              Open the stress lab
             </Link>
             <Link
-              href="#method"
+              href="/studio"
               className="w-fit rounded-sm border border-hairline bg-surface-strong px-5 py-3 text-sm font-medium text-ink transition-colors hover:border-ink"
             >
-              How the numbers work
+              Compare scenarios
+            </Link>
+            <Link
+              href="/method"
+              className="w-fit px-5 py-3 text-sm font-medium text-ink-soft underline decoration-hairline underline-offset-4 transition-colors hover:text-ink hover:decoration-ink"
+            >
+              How the model works
             </Link>
           </div>
           <div className="mt-10 grid max-w-3xl grid-cols-2 gap-px overflow-hidden rounded-sm border border-hairline bg-hairline sm:grid-cols-4">
             {[
-              ["110%", "Documented liquidation threshold"],
-              ["6", "Presets + user-defined shocks"],
-              ["1", "Live oracle read — Mezo testnet"],
-              ["0", "Wallet connections or fake data"],
+              [`${INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT}%`, "Documented liquidation threshold"],
+              ["3", "Compared price paths, plus shocks"],
+              ["1", "Live oracle read on Mezo testnet"],
+              ["0", "Wallet connections or invented data"],
             ].map(([k, v]) => (
               <div key={v} className="bg-surface-strong px-3 py-3">
                 <p className="tabular text-lg font-semibold text-ink">{k}</p>
@@ -101,28 +123,53 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="method" className="border-b border-hairline">
+      {/* Three tools, mapped */}
+      <section className="border-b border-hairline">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
-          <h2 className="text-2xl font-semibold tracking-tight">Three moves, no noise</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Three tools, one model</h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
-            The engine is a small, fully-tested module: collateral ratio = collateral
-            value / total debt, liquidation price = threshold × debt / collateral, and
-            the same two quantities re-evaluated at every shocked price. That is the
-            whole model — which is exactly why you can trust the outputs.
+            The engine is a small, tested module. Collateral ratio equals
+            collateral value divided by total debt. Liquidation price equals
+            threshold times debt divided by collateral. The same two formulas
+            are re-evaluated at every price the scenarios ask about.
           </p>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
-            {steps.map((s) => (
-              <div
-                key={s.n}
-                className="rounded-sm border border-hairline bg-surface-strong p-5"
+            {sections.map((s) => (
+              <Link
+                key={s.href}
+                href={s.href}
+                className="group flex flex-col rounded-sm border border-hairline bg-surface-strong p-5 transition-colors hover:border-ink"
               >
+                <h3 className="text-sm font-semibold text-ink">{s.title}</h3>
+                <p className="mt-1.5 flex-1 text-xs leading-relaxed text-ink-soft">{s.body}</p>
+                <span className="mt-3 text-[11px] font-medium text-accent">
+                  {s.cta} <span aria-hidden>→</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How the model works, briefly */}
+      <section className="border-b border-hairline">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
+          <h2 className="text-2xl font-semibold tracking-tight">How the model works</h2>
+          <div className="mt-8 grid gap-5 md:grid-cols-3">
+            {steps.map((s) => (
+              <div key={s.n} className="border-t border-hairline pt-4">
                 <p className="tabular text-xs font-semibold text-ink-faint">{s.n}</p>
                 <h3 className="mt-2 text-sm font-semibold text-ink">{s.title}</h3>
                 <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{s.body}</p>
               </div>
             ))}
           </div>
+          <Link
+            href="/method"
+            className="mt-6 inline-block text-[11px] font-medium text-accent underline underline-offset-2"
+          >
+            Read the full methodology, sources, and limitations →
+          </Link>
         </div>
       </section>
 
@@ -130,13 +177,13 @@ export default function Home() {
       <section className="border-b border-hairline">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
           <h2 className="text-2xl font-semibold tracking-tight">
-            Verified against Mezo documentation
+            Pinned to official Mezo documentation
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
-            Where official docs state a parameter, DROPTEST pins it and cites the
-            page. Where they don&apos;t — current interest rate, a named
-            borrower-facing liquidation penalty — the app says so and leaves the
-            input as a labelled assumption instead of fabricating a number.
+            Where the docs state a parameter, DROPTEST pins it and cites the
+            page. Where they do not, such as the current interest rate or a
+            borrower-facing liquidation penalty, the app says so and leaves
+            the number as a labelled assumption instead of inventing one.
           </p>
           <div className="mt-8 grid gap-px overflow-hidden rounded-sm border border-hairline bg-hairline sm:grid-cols-2">
             {verified.map((v) => (
@@ -164,21 +211,23 @@ export default function Home() {
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1fr_380px]">
           <div>
             <h2 className="text-2xl font-semibold tracking-tight">
-              Mezo integration, kept honestly small
+              One live call, read-only
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
               DROPTEST makes exactly one network call: a read-only{" "}
-              <code className="tabular">latestRoundData()</code> against the Skip
-              BTC/USD aggregator that Mezo&apos;s oracle documentation publishes
-              for its testnet. It&apos;s wired through viem — no wallet, no key,
-              no signing — and one click syncs the spot price in the lab. If the
-              RPC is unreachable, the tool says so rather than guessing.
+              <code className="tabular">latestRoundData()</code> against the
+              Skip BTC/USD aggregator that Mezo&apos;s oracle documentation
+              publishes for its testnet. It runs through viem with no wallet,
+              no key, and no signing. One click syncs the spot price in the
+              stress lab, and the reading is labelled as an oracle value so
+              it never blends into prices you type by hand. If the call
+              fails, the tool tells you instead of guessing.
             </p>
             <ul className="mt-6 space-y-2 text-sm leading-relaxed text-ink-soft">
               <li className="flex gap-3">
                 <span className="tabular text-ink-faint">01</span>
-                Mezo testnet · chain id{" "}
-                <code className="tabular">{MEZO_TESTNET.chainId}</code> ·{" "}
+                Mezo testnet, chain id{" "}
+                <code className="tabular">{MEZO_TESTNET.chainId}</code>, RPC{" "}
                 <code className="break-all">rpc.test.mezo.org</code>
               </li>
               <li className="flex gap-3">
@@ -196,10 +245,12 @@ export default function Home() {
               href="/lab"
               className="mt-7 inline-block rounded-sm bg-ink px-5 py-3 text-sm font-medium text-background transition-colors hover:bg-ink-soft"
             >
-              Open the risk lab →
+              Open the stress lab
             </Link>
           </div>
-          <MezoOracleBadge className="h-fit rounded-sm border border-hairline bg-surface-strong p-4" />
+          <div className="self-start">
+            <MezoOracleBadge className="rounded-sm border border-hairline bg-surface-strong p-4" />
+          </div>
         </div>
       </section>
 
@@ -207,18 +258,18 @@ export default function Home() {
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 text-center sm:px-6 sm:py-24">
           <h2 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
-            Know your distance to liquidation — in one screen.
+            Find your distance to liquidation in one screen.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-ink-soft sm:text-base">
-            Take the starter position for a spin, load the staged crash
-            timeline, and see the exact price where your hypothetical trove
-            turns hostile.
+            Start with the sample position, load a crash path, and see the
+            exact price where your hypothetical position crosses the
+            threshold. Then print the report and keep it.
           </p>
           <Link
             href="/lab"
             className="mt-8 inline-block rounded-sm bg-ink px-6 py-3.5 text-sm font-medium text-background transition-colors hover:bg-ink-soft"
           >
-            Run a stress test →
+            Open the stress lab
           </Link>
         </div>
       </section>

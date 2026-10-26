@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import {
   analyze,
   applyScenarios,
   cumulativePricePath,
+  reverseStress,
   InvalidPositionError,
+  type ReverseStressResult,
   type ScenarioState,
 } from "@/lib/engine/risk";
 import {
@@ -15,10 +18,16 @@ import {
   PRESET_SCENARIOS,
   TIMELINE_STAGES,
 } from "@/lib/engine/scenarios";
-import { DOC_CONFLICT_NOTE, INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT, MEZO_TESTNET } from "@/lib/mezo/verified";
-import { btc as fmtBtc, pct as fmtPct, ratio as fmtRatio, usd } from "@/lib/format";
+import {
+  DOC_CONFLICT_NOTE,
+  INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT,
+  MEZO_TESTNET,
+} from "@/lib/mezo/verified";
+import { pct as fmtPct, ratio as fmtRatio, usd } from "@/lib/format";
 import { RatioCurve, ScenarioBars, TimelineChart } from "@/components/charts";
 import { MezoOracleBadge } from "@/components/mezo-oracle-badge";
+import { saveReportSnapshot, type ReportSnapshot } from "@/lib/report";
+import type { LabInputs } from "@/lib/engine/scenarios";
 
 type FieldKey = "btcCollateral" | "musdDebt" | "btcPriceUsd";
 
@@ -26,7 +35,6 @@ interface ParsedInputs {
   btcCollateral: number | null;
   musdDebt: number | null;
   btcPriceUsd: number | null;
-  liquidationThresholdPct: number;
 }
 
 function parseField(raw: string): number | null {
@@ -34,46 +42,65 @@ function parseField(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-const fieldMeta: Record<FieldKey, { label: string; suffix: string; step: string }> = {
-  btcCollateral: { label: "BTC collateral", suffix: "BTC", step: "0.0001" },
-  musdDebt: { label: "MUSD debt (total)", suffix: "MUSD", step: "100" },
-  btcPriceUsd: { label: "Spot BTC price", suffix: "USD / BTC", step: "100" },
+const fieldMeta: Record<FieldKey, {
+  label: string;
+  suffix: string;
+  step: string;
+  hint: string;
+}> = {
+  btcCollateral: {
+    label: "BTC collateral",
+    suffix: "BTC",
+    step: "0.0001",
+    hint: "Amount you would lock up",
+  },
+  musdDebt: {
+    label: "MUSD debt (total)",
+    suffix: "MUSD",
+    step: "100",
+    hint: "Supply to borrow against it",
+  },
+  btcPriceUsd: {
+    label: "Spot BTC price",
+    suffix: "USD / BTC",
+    step: "100",
+    hint: "You type this, or sync the oracle",
+  },
 };
 
-/**
- * Verified-parameter callout rows; quotes cite the documentation they
- * were pulled from. Nothing here is adjustable "fact" — the only
- * engine input the user can tune is the threshold, marked as
- * verified-but-explorable.
- */
 const ASSUMPTIONS = [
   {
-    title: "Liquidation threshold — 110% (verified)",
-    body: "Mezo's developer guide: \"When a trove's collateralization ratio falls below 110%, it can be liquidated by anyone.\" The price at which a position's ratio reaches exactly 110% of its debt is the liquidation price. You can drag the threshold below to explore what-if values, but 110% is the documented number.",
+    title: "Liquidation threshold: 110% (verified)",
+    body: "Mezo's developer guide says a trove can be liquidated when its collateralization ratio \"falls below 110%\". The price at which a position's ratio reaches exactly 110% of its debt is the liquidation price. The slider below 110% is a what-if control, not the documented value.",
     source: "https://mezo.org/docs/developers/musd/",
   },
   {
-    title: "Recovery Mode — system TCR below 150% (verified)",
-    body: "150% is a system-wide total-collateral-ratio trigger, not a per-position liquidation line. One older Mezo blog wrote that loans under 150% \"risk liquidation\" — a conflict with the current guide's single-process liquidation. We do not resolve that silently: the calculator models 110% per position and keeps Recovery Mode as system context.",
+    title: "Recovery Mode: system TCR below 150% (verified)",
+    body: "Recovery Mode is a system-wide trigger based on the total collateral ratio of the whole market, not a per-position liquidation line. One older Mezo blog wrote that loans under 150% \"risk liquidation\", which conflicts with the current guide's single 110% process. The calculator models 110% per position and documents the conflict instead of resolving it silently.",
     source: DOC_CONFLICT_NOTE.source,
   },
   {
     title: "Liquidation outcome (verified)",
-    body: "\"The liquidator is rewarded with a gas compensation and a percentage of the trove's collateral\" — $200 MUSD plus 0.5% of collateral; the Stability Pool burns MUSD against the debt and seizes the remaining 99.5%. The calculator therefore shows liquidation reclaiming no residual collateral for the borrower.",
+    body: "Per the mUSD documentation, the liquidator receives a 0.5% share of the trove's collateral plus 200 MUSD gas compensation. The Stability Pool burns MUSD against the debt and seizes the remaining 99.5%. The calculator therefore shows liquidation returning nothing to the borrower.",
     source: "https://github.com/mezo-org/musd/blob/main/docs/README.md",
   },
   {
-    title: "Interest & fees (verified range, rate not modelled)",
-    body: "Mezo docs state a 0.1% governable borrowing charge added to trove debt, and fixed interest whose initial rates ranged 1–5%. The current rate is not published in the documentation, so DROPTEST keeps your debt figure static — enter the total debt you wish to stress rather than modelling future accrual.",
+    title: "Interest and fees (verified range, rate not modelled)",
+    body: "Mezo documents a 0.1% governable borrowing charge added to trove debt, and fixed interest whose initial rates ranged from 1% to 5%. The live rate is not published, so your debt figure stays static. Enter the total debt you want to stress; the model does not project future accrual.",
     source: "https://mezo.org/docs/users/borrow/mint-musd/",
   },
   {
     title: "What this tool is not",
-    body: "DROPTEST simulates hypothetical positions only. It never connects to a wallet, never reads live user troves, and produces no signed transactions. The one live integration is a read-only BTC/USD price call to Mezo testnet's documented Skip oracle.",
+    body: "DROPTEST runs hypothetical positions only. It never connects to a wallet, never reads live user troves, and produces no signed transactions. The single live integration is a read-only BTC/USD price request to the testnet oracle Mezo documents.",
+    source: undefined,
   },
 ];
 
+const REVERSE_TARGET_MIN_PCT = 100;
+const REVERSE_TARGET_MAX_PCT = 500;
+
 export function RiskLab() {
+  const router = useRouter();
   const [fields, setFields] = useState<Record<FieldKey, string>>({
     btcCollateral: String(DEFAULT_LAB.btcCollateral),
     musdDebt: String(DEFAULT_LAB.musdDebt),
@@ -84,29 +111,38 @@ export function RiskLab() {
   const [timelineDrops, setTimelineDrops] = useState<number[]>(
     TIMELINE_STAGES.map((s) => s.dropPct),
   );
+  const [targetRatioInput, setTargetRatioInput] = useState("130");
+  const [spotSource, setSpotSource] = useState<"manual" | "oracle">("manual");
 
-  const parsed: ParsedInputs = useMemo(
-    () => ({
+  const parsed = useMemo<{ fields: ParsedInputs; threshold: number }>(() => ({
+    fields: {
       btcCollateral: parseField(fields.btcCollateral),
       musdDebt: parseField(fields.musdDebt),
       btcPriceUsd: parseField(fields.btcPriceUsd),
-      liquidationThresholdPct: threshold,
-    }),
-    [fields, threshold],
-  );
+    },
+    threshold,
+  }), [fields, threshold]);
 
-  const invalidFields = (Object.keys(parsed) as FieldKey[]).filter(
-    (k) => parsed[k] === null,
-  );
+  const invalidFields: FieldKey[] = useMemo(() => {
+    const missing: FieldKey[] = [];
+    if (parsed.fields.btcCollateral === null) missing.push("btcCollateral");
+    if (parsed.fields.musdDebt === null) missing.push("musdDebt");
+    if (parsed.fields.btcPriceUsd === null) missing.push("btcPriceUsd");
+    return missing;
+  }, [parsed]);
 
-  const validInputs = useMemo(() => {
-    if (parsed.btcCollateral === null || parsed.musdDebt === null || parsed.btcPriceUsd === null) {
+  const validInputs: LabInputs | null = useMemo(() => {
+    if (
+      parsed.fields.btcCollateral === null ||
+      parsed.fields.musdDebt === null ||
+      parsed.fields.btcPriceUsd === null
+    ) {
       return null;
     }
     return {
-      btcCollateral: parsed.btcCollateral,
-      musdDebt: parsed.musdDebt,
-      btcPriceUsd: parsed.btcPriceUsd,
+      btcCollateral: parsed.fields.btcCollateral,
+      musdDebt: parsed.fields.musdDebt,
+      btcPriceUsd: parsed.fields.btcPriceUsd,
       liquidationThresholdPct: threshold,
     };
   }, [parsed, threshold]);
@@ -143,18 +179,28 @@ export function RiskLab() {
     }
   }, [validInputs, customDrop]);
 
+  const targetRatio = Number(targetRatioInput.replace(/,/g, ""));
+  const reverse: ReverseStressResult | { error: string } | null = useMemo(() => {
+    if (!validInputs) return null;
+    if (!Number.isFinite(targetRatio) || targetRatio <= 0) {
+      return { error: "Enter a collateral ratio greater than zero." };
+    }
+    try {
+      return reverseStress(validInputs, targetRatio);
+    } catch (err) {
+      if (err instanceof InvalidPositionError) return { error: err.message };
+      throw err;
+    }
+  }, [validInputs, targetRatio]);
+
   const timelineStages = useMemo(() => {
     if (!validInputs) return [];
     const prices = cumulativePricePath(validInputs.btcPriceUsd, timelineDrops);
-    let cumulative = 0;
-    return prices.map((price, i) => {
-      cumulative += timelineDrops[i];
-      return {
-        label: `Stage ${i + 1} · −${cumulative.toFixed(0)}% cumulative`,
-        priceUsd: price,
-        cumulativeDropPct: cumulative,
-      };
-    });
+    return prices.map((price, i) => ({
+      label: `Stage ${i + 1}`,
+      priceUsd: price,
+      cumulativeDropPct: (1 - price / validInputs.btcPriceUsd) * 100,
+    }));
   }, [validInputs, timelineDrops]);
 
   const timelineStates: ScenarioState[] = useMemo(() => {
@@ -176,14 +222,15 @@ export function RiskLab() {
 
   const setField = useCallback((key: FieldKey, value: string) => {
     setFields((prev) => ({ ...prev, [key]: value }));
+    if (key === "btcPriceUsd") {
+      setSpotSource("manual");
+    }
   }, []);
 
-  const syncFromOracle = useCallback(
-    (priceUsd: number) => {
-      setField("btcPriceUsd", String(Math.round(priceUsd * 100) / 100));
-    },
-    [setField],
-  );
+  const syncFromOracle = useCallback((priceUsd: number) => {
+    setField("btcPriceUsd", String(Math.round(priceUsd * 100) / 100));
+    setSpotSource("oracle");
+  }, [setField]);
 
   const reset = useCallback(() => {
     setFields({
@@ -193,51 +240,91 @@ export function RiskLab() {
     });
     setThreshold(DEFAULT_LAB.liquidationThresholdPct);
     setTimelineDrops(TIMELINE_STAGES.map((s) => s.dropPct));
+    setCustomDrop(50);
+    setTargetRatioInput("130");
+    setSpotSource("manual");
   }, []);
+
+  const buildSnapshot = useCallback((): ReportSnapshot | null => {
+    if (!validInputs) return null;
+    return {
+      generatedAt: new Date().toISOString(),
+      origin: "lab",
+      inputs: validInputs,
+      customDropPct: customDrop,
+      timelineDropsPct: timelineDrops,
+    };
+  }, [validInputs, customDrop, timelineDrops]);
+
+  const openReport = useCallback(() => {
+    const snapshot = buildSnapshot();
+    if (!snapshot) return;
+    if (!saveReportSnapshot(snapshot)) return;
+    router.push("/report");
+  }, [buildSnapshot, router]);
 
   const timelineAllLiquidated = timelineStates.some((s) => s.liquidated);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <div className="mb-8 flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mb-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Risk lab</h1>
-          <p className="mt-1 max-w-xl text-sm leading-relaxed text-ink-soft">
-            Hypothetical BTC/MUSD position under price shock scenarios.
-            Parameters follow official Mezo documentation; nothing you enter
-            here touches a live position.
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Stress Lab
+          </h1>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
+            A hypothetical BTC/MUSD position under price shocks. Parameters
+            follow official Mezo documentation, and nothing you enter here
+            touches a live position.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={reset}
-          className="w-fit rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong"
-        >
-          Reset to starter position
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={reset}
+            className="w-fit rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong"
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={openReport}
+            disabled={!validInputs}
+            className="w-fit rounded-sm bg-ink px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Printable report
+          </button>
+        </div>
       </div>
 
       {invalidFields.length > 0 && (
-        <div className="mb-6 rounded-sm border border-amber/40 bg-amber/5 px-4 py-3 text-sm text-amber">
+        <div className="mb-8 rounded-sm border border-amber/40 bg-amber/5 px-4 py-3 text-sm text-amber">
           Fix these inputs to recalculate:{" "}
-          {invalidFields.map((k) => fieldMeta[k].label).join(", ")} must be numbers greater
-          than zero.
+          {invalidFields.map((k) => fieldMeta[k].label).join(", ")} must be
+          numbers greater than zero.
         </div>
       )}
 
       {/* Position inputs */}
-      <section className="mb-10 grid gap-6 md:grid-cols-[1fr_320px]">
-        <div className="rounded-sm border border-hairline bg-surface-strong p-4 sm:p-5">
-          <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
+      <section className="mb-12 grid gap-6 md:grid-cols-[1fr_320px]">
+        <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
+          <h2 className="mb-1 text-sm font-semibold text-ink">
             Hypothetical position
           </h2>
+          <p className="mb-5 text-xs text-ink-faint">
+            The three numbers the whole page runs on. Nothing is sent anywhere.
+          </p>
           <div className="grid gap-4 sm:grid-cols-3">
             {(Object.keys(fieldMeta) as FieldKey[]).map((key) => (
               <label key={key} className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-ink-soft">
                   {fieldMeta[key].label}
                 </span>
-                <div className="flex items-baseline rounded-sm border border-hairline bg-background px-3 py-2 focus-within:border-ink">
+                <div
+                  className={`flex items-baseline border bg-background px-3 py-2 focus-within:border-ink ${
+                    parsed.fields[key] === null ? "border-amber/60" : "border-hairline"
+                  }`}
+                >
                   <input
                     type="number"
                     inputMode="decimal"
@@ -252,34 +339,44 @@ export function RiskLab() {
                     {fieldMeta[key].suffix}
                   </span>
                 </div>
+                <span className="text-[11px] text-ink-faint">
+                  {fieldMeta[key].hint}
+                </span>
               </label>
             ))}
           </div>
+          <p className="mt-2 text-[11px] text-ink-faint">
+            Spot price:
+            {spotSource === "oracle"
+              ? " last synced from the Mezo testnet oracle"
+              : " entered by hand"}
+          </p>
 
           {metrics && validInputs && (
-            <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-hairline bg-hairline sm:grid-cols-5">
+            <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden border bg-hairline sm:grid-cols-5">
               {[
-                ["Collateral value", usd(metrics.collateralValueUsd, 0)],
-                ["Collateral ratio", fmtRatio(metrics.collateralRatio)],
-                ["LTV", fmtRatio(metrics.ltv)],
-                ["Liquidation price", usd(metrics.liquidationPriceUsd, 0)],
-                ["Drop to liquidation", fmtPct(metrics.dropToLiquidationPct)],
-              ].map(([term, value]) => (
+                ["Collateral value", usd(metrics.collateralValueUsd, 0), "Right now"],
+                ["Collateral ratio", fmtRatio(metrics.collateralRatio), "Collateral value / debt"],
+                ["LTV", fmtRatio(metrics.ltv), "Debt / collateral value"],
+                ["Liquidation price", usd(metrics.liquidationPriceUsd, 0), `At ${threshold}% ratio`],
+                ["Drop to liquidation", fmtPct(metrics.dropToLiquidationPct), "From current spot"],
+              ].map(([term, value, hint]) => (
                 <div key={term} className="bg-surface-strong px-3 py-3">
                   <dt className="text-[10px] uppercase tracking-widest text-ink-faint">
                     {term}
                   </dt>
                   <dd className="tabular mt-1 text-sm font-medium text-ink">{value}</dd>
+                  <p className="mt-0.5 text-[10px] text-ink-faint">{hint}</p>
                 </div>
               ))}
             </dl>
           )}
         </div>
 
-        {/* Assumption: threshold */}
-        <div className="flex flex-col gap-4 rounded-sm border border-hairline bg-surface-strong p-4 sm:p-5">
-          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
-            Assumption you can tune
+        {/* Threshold assumption */}
+        <div className="flex flex-col gap-4 border border-hairline bg-surface-strong p-4 sm:p-6">
+          <h2 className="text-sm font-semibold text-ink">
+            Threshold you can change
           </h2>
           <label className="flex flex-col gap-1.5">
             <span className="flex items-baseline justify-between text-xs font-medium text-ink-soft">
@@ -300,26 +397,44 @@ export function RiskLab() {
             />
           </label>
           <p className="text-[11px] leading-relaxed text-ink-faint">
-            Default {INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT}% is{" "}
-            <span className="rounded-sm border border-accent/30 bg-accent/5 px-1 text-accent">
+            The default {INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT}% is{" "}
+            <span className="border border-accent/30 bg-accent/5 px-1 text-accent">
               verified
             </span>{" "}
-            from Mezo docs — individual troves are liquidatable when their ratio
-            falls below it. Adjust to explore what-ifs only.
+            in Mezo documentation: individual troves are liquidatable when
+            their ratio falls below it. Move the slider to explore other
+            values; the charts update to whatever you choose.
           </p>
+          {metrics && validInputs && (
+            <p className="border-t border-hairline pt-3 text-[11px] leading-relaxed text-ink-faint">
+              At the documented {INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT}%
+              threshold this position would liquidate at{" "}
+              <span className="tabular text-ink">
+                {usd(
+                  (validInputs.musdDebt *
+                    INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT) /
+                    (100 * validInputs.btcCollateral),
+                  0,
+                )}
+              </span>
+              <span className="no-print">. The chart and the reverse stress tool follow your selected threshold.</span>
+            </p>
+          )}
         </div>
       </section>
 
       {/* Charts row */}
       {metrics && validInputs && (
-        <section className="mb-10 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-sm border border-hairline bg-surface-strong p-4 sm:p-5">
-            <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
+        <section className="mb-12 grid gap-6 lg:grid-cols-2">
+          <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
+            <h2 className="mb-1 text-sm font-semibold text-ink">
               Collateral ratio vs BTC price
             </h2>
-            <p className="mb-3 text-xs text-ink-soft">
-              The dot marks where this position hits its {threshold}% threshold
-              at {usd(metrics.liquidationPriceUsd, 0)}.
+            <p className="mb-4 text-xs leading-relaxed text-ink-soft">
+              Ratio rises with price. The dashed line is your {threshold}%
+              threshold, and the dot marks where this position reaches it at{" "}
+              {usd(metrics.liquidationPriceUsd, 0)}. Left of the dot the
+              position is liquidatable.
             </p>
             <RatioCurve
               btcCollateral={validInputs.btcCollateral}
@@ -330,14 +445,15 @@ export function RiskLab() {
             />
           </div>
 
-          <div className="flex flex-col gap-4 rounded-sm border border-hairline bg-surface-strong p-4 sm:p-5">
+          <div className="flex flex-col border border-hairline bg-surface-strong p-4 sm:p-6">
             <div>
-              <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
-                Scenario timeline
+              <h2 className="mb-1 text-sm font-semibold text-ink">
+                Staged crash timeline
               </h2>
-              <p className="mb-3 text-xs text-ink-soft">
-                One crash path, stage by stage. Stages compound — each price is
-                the previous cumulatively drawn down.
+              <p className="mb-4 text-xs leading-relaxed text-ink-soft">
+                One crash, stage by stage. Each stage compounds on the last,
+                so the ratio line only moves further down. Red dots mark
+                stages below the threshold. Click a stage chip to remove it.
               </p>
               <TimelineChart
                 btcCollateral={validInputs.btcCollateral}
@@ -347,24 +463,25 @@ export function RiskLab() {
                 liquidationThresholdPct={threshold}
               />
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {timelineStages.map((s, i) => {
                 const st = timelineStates[i];
                 return (
                   <button
-                    key={s.label}
+                    key={`${s.label}-${i}`}
                     type="button"
                     onClick={() =>
                       setTimelineDrops((prev) => prev.filter((_, j) => j !== i))
                     }
-                    title="Click to remove this stage"
+                    title="Remove this stage"
                     className={`rounded-sm border px-2 py-1 text-[11px] tabular transition-colors ${
                       st.liquidated
                         ? "border-risk/40 bg-risk/5 text-risk"
                         : "border-hairline bg-background text-ink-soft hover:border-ink"
                     }`}
                   >
-                    {s.label} · {fmtRatio(st.collateralRatio)}
+                    Stage {i + 1} · −{s.cumulativeDropPct.toFixed(0)}% total ·{" "}
+                    {fmtRatio(st.collateralRatio)}
                   </button>
                 );
               })}
@@ -373,13 +490,13 @@ export function RiskLab() {
                 onClick={() => setTimelineDrops((prev) => [...prev, customDrop])}
                 className="rounded-sm border border-dashed border-hairline px-2 py-1 text-[11px] text-ink-soft transition-colors hover:border-ink"
               >
-                + add −{customDrop}% stage
+                + add shock of −{customDrop}%
               </button>
             </div>
             {timelineAllLiquidated && (
-              <p className="text-xs text-risk">
-                This path liquidates the position: at least one stage ends below the{" "}
-                {threshold}% threshold.
+              <p className="mt-3 text-xs text-risk">
+                This path liquidates the position: at least one stage ends
+                below the {threshold}% threshold.
               </p>
             )}
           </div>
@@ -388,16 +505,14 @@ export function RiskLab() {
 
       {/* Custom shock + presets */}
       {validInputs && (
-        <section className="mb-10 grid gap-6 lg:grid-cols-[320px_1fr]">
-          <div className="flex flex-col gap-4 rounded-sm border border-hairline bg-surface-strong p-4 sm:p-5">
-            <h2 className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
-              User-defined shock
-            </h2>
+        <section className="mb-12 grid gap-6 lg:grid-cols-[340px_1fr]">
+          <div className="flex flex-col gap-4 border border-hairline bg-surface-strong p-4 sm:p-6">
+            <h2 className="text-sm font-semibold text-ink">One custom shock</h2>
             <label className="flex flex-col gap-1.5">
               <span className="flex items-baseline justify-between text-xs font-medium text-ink-soft">
                 Price drop
                 <span className="tabular text-sm font-semibold text-ink">
-                  −{customDrop.toFixed(0)}%
+                  −{customDrop}%
                 </span>
               </span>
               <input
@@ -412,14 +527,14 @@ export function RiskLab() {
               />
             </label>
             {customScenario && (
-              <div className="rounded-sm border border-hairline bg-background px-3 py-3 text-sm">
+              <div className="border border-hairline bg-background px-3 py-3 text-sm">
                 <p className="flex items-baseline justify-between">
-                  <span className="text-ink-faint">Price at</span>
+                  <span className="text-ink-faint">Price after the drop</span>
                   <span className="tabular text-ink">
                     {usd(customScenario.shockedPriceUsd, 0)}
                   </span>
                 </p>
-                <p className="flex items-baseline justify-between">
+                <p className="mt-1 flex items-baseline justify-between">
                   <span className="text-ink-faint">Collateral ratio</span>
                   <span
                     className={`tabular font-medium ${
@@ -429,28 +544,118 @@ export function RiskLab() {
                     {fmtRatio(customScenario.collateralRatio)}
                   </span>
                 </p>
-                <p className="mt-1 text-xs">
+                <p className="mt-1.5 text-xs">
                   {customScenario.liquidated ? (
                     <span className="text-risk">
-                      Below threshold — liquidatable.
+                      Below the {threshold}% threshold. Liquidatable.
                     </span>
                   ) : (
                     <span className="text-accent">
-                      Survives, then absorbs another{" "}
-                      {fmtPct(customScenario.headroomDropPct)} before liquidation.
+                      Survives, and can absorb another{" "}
+                      {fmtPct(customScenario.headroomDropPct)} before
+                      liquidation.
                     </span>
                   )}
                 </p>
               </div>
             )}
+
+            {/* Reverse stress test */}
+            <div className="border-t border-hairline pt-4">
+              <h2 className="text-sm font-semibold text-ink">
+                Reverse stress test
+              </h2>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-faint">
+                Pick a collateral ratio and read the price that would put you
+                there. This is your own what-if threshold, not Mezo&apos;s
+                documented {INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT}% liquidation
+                threshold.
+              </p>
+              <label className="mt-3 flex flex-col gap-1.5">
+                <span className="flex items-baseline justify-between text-xs font-medium text-ink-soft">
+                  Target collateral ratio
+                  <span
+                    className={`tabular ${
+                      targetRatio > 0 && Number.isFinite(targetRatio)
+                        ? "text-sm font-semibold text-ink"
+                        : "text-ink-faint"
+                    }`}
+                  >
+                    {targetRatioInput !== "" && Number.isFinite(targetRatio)
+                      ? `${targetRatio}%`
+                      : "-"}
+                  </span>
+                </span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={REVERSE_TARGET_MIN_PCT}
+                  max={REVERSE_TARGET_MAX_PCT}
+                  step={1}
+                  value={targetRatioInput}
+                  onChange={(e) => setTargetRatioInput(e.target.value)}
+                  className={`tabular w-full border bg-background px-3 py-2 text-sm outline-none focus-within:border-ink ${
+                    reverse !== null && "error" in reverse
+                      ? "border-risk/60"
+                      : "border-hairline"
+                  }`}
+                  aria-label="Target collateral ratio in percent"
+                />
+              </label>
+              {reverse === null ? (
+                <p className="mt-2 text-[11px] text-ink-faint">
+                  Enter a valid position above to run the reverse test.
+                </p>
+              ) : "error" in reverse ? (
+                <p className="mt-2 text-[11px] text-risk">{reverse.error}</p>
+              ) : reverse.alreadyBreached ? (
+                <div className="mt-3 border border-amber/40 bg-amber/5 px-3 py-3 text-xs">
+                  <p className="text-amber">
+                    Your position is already below {reverse.targetRatioPct}%
+                    at the current spot price. It would need a higher BTC
+                    price of about{" "}
+                    <span className="tabular">
+                      {usd(reverse.priceUsd, 0)}
+                    </span>{" "}
+                    to reach that ratio.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-3 border border-hairline bg-background px-3 py-3 text-xs">
+                  <p className="flex items-baseline justify-between">
+                    <span className="text-ink-faint">
+                      BTC price at {reverse.targetRatioPct}% ratio
+                    </span>
+                    <span className="tabular font-medium text-ink">
+                      {usd(reverse.priceUsd, 0)}
+                    </span>
+                  </p>
+                  <p className="mt-1 flex items-baseline justify-between">
+                    <span className="text-ink-faint">Drop from spot</span>
+                    <span className="tabular font-medium text-ink">
+                      −{fmtPct(reverse.dropFromSpotPct)}
+                    </span>
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-ink-faint">
+                    User-selected threshold. Mezo&apos;s documented
+                    liquidation threshold is{" "}
+                    {INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT}%.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="rounded-sm border border-hairline bg-surface-strong p-4 sm:p-5">
-            <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
+          <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
+            <h2 className="mb-1 text-sm font-semibold text-ink">
               Preset shocks
             </h2>
+            <p className="mb-4 text-xs text-ink-soft">
+              Severity ladder from a mild rotation to a tail event. Bars under
+              the dashed threshold line are liquidatable.
+            </p>
             <ScenarioBars scenarios={scenarioStates} liquidationThresholdPct={threshold} />
-            <ul className="mt-3 divide-y divide-hairline border-t border-hairline text-sm">
+            <ul className="mt-4 divide-y divide-hairline border-t border-hairline text-sm">
               {scenarioStates.map((s) => (
                 <li key={s.id} className="flex items-baseline justify-between gap-3 py-2.5">
                   <span className="text-ink-soft">
@@ -483,52 +688,60 @@ export function RiskLab() {
       )}
 
       {/* Mezo integration */}
-      <section className="mb-10 rounded-sm border border-hairline bg-surface-strong p-4 sm:p-5">
-        <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
-          Mezo integration — live read-only
+      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+        <h2 className="mb-1 text-sm font-semibold text-ink">
+          Oracle sync, read-only
         </h2>
         <p className="mb-4 max-w-2xl text-xs leading-relaxed text-ink-soft">
           The only live call in DROPTEST is documented by Mezo and read-only.
-          On success, &quot;Sync spot&quot; fills the price input from the
-          testnet oracle; if the read fails, nothing happens and the manual
-          price you typed stands.
+          On success the price input takes the testnet oracle value and the
+          page labels it as an oracle reading. If the call fails the manual
+          price you typed stays in place.
         </p>
         <div className="grid gap-4 md:grid-cols-2">
           <MezoOracleBadge onPrice={syncFromOracle} />
-          <div className="rounded-sm border border-hairline bg-background p-3 text-xs leading-relaxed text-ink-faint">
+          <div className="border border-hairline bg-background p-3 text-xs leading-relaxed text-ink-faint">
             <p>
-              Network · Mezo Testnet (chain id{" "}
+              Network: Mezo Testnet, chain id{" "}
               <code className="tabular">{MEZO_TESTNET.chainId}</code>, RPC{" "}
-              <code className="break-all">rpc.test.mezo.org</code>) — values from
-              Mezo&apos;s official developer docs.
+              <code className="break-all">rpc.test.mezo.org</code>. Values
+              from Mezo&apos;s official developer docs.
             </p>
             <p className="mt-2">
               MUSD on testnet:{" "}
               <code className="break-all tabular">{MEZO_TESTNET.musd}</code>{" "}
-              (18 decimals). Explorer:{" "}
+              (18 decimals).{" "}
               <a
                 href={MEZO_TESTNET.explorer}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-accent underline underline-offset-2"
               >
-                explorer.test.mezo.org
+                Explorer
               </a>
               .
             </p>
             <p className="mt-2">
               No wallet connection, no transaction signing, no live position
-              reads — DROPTEST deliberately keeps simulations fully client-side.
+              reads. Simulations stay client-side by design.
             </p>
           </div>
         </div>
       </section>
 
       {/* Assumptions */}
-      <section className="rounded-sm border border-hairline bg-surface-strong p-4 sm:p-5">
-        <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
-          Assumptions &amp; sources
+      <section className="border border-hairline bg-surface-strong p-4 sm:p-6">
+        <h2 className="mb-1 text-sm font-semibold text-ink">
+          Assumptions and sources
         </h2>
+        <p className="mb-5 text-xs text-ink-soft">
+          What is documented, what is assumed, and where each number comes
+          from. The fuller write-up lives in{" "}
+          <Link href="/method" className="text-accent underline underline-offset-2">
+            Research & Methodology
+          </Link>
+          .
+        </p>
         <div className="grid gap-5 md:grid-cols-2">
           {ASSUMPTIONS.map((a) => (
             <div key={a.title} className="border-t border-hairline pt-3">
@@ -551,19 +764,10 @@ export function RiskLab() {
 
       {metrics === null && invalidFields.length === 0 && (
         <p className="mt-6 text-sm text-ink-faint">
-          Position incomplete — all three inputs must be greater than zero for
+          Position incomplete. All three inputs must be greater than zero for
           the model to run.
         </p>
       )}
-
-      <p className="mt-8 text-center text-xs text-ink-faint">
-        All figures above recompute live from your inputs only — nothing is
-        fetched into them except the opt-in oracle price sync. See the{" "}
-        <Link href="/" className="text-accent underline underline-offset-2">
-          overview
-        </Link>{" "}
-        for methodology and sources.
-      </p>
     </main>
   );
 }

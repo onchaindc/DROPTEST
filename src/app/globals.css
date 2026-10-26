@@ -56,3 +56,21 @@ input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* Print: keep the report clean. Recharts SVGs render fine on paper,
+   and ink colors are preserved for the risk/accent indicators. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  a[href^="http"]::after {
+    content: "";
+  }
+}

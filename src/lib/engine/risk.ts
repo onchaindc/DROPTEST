@@ -190,6 +190,52 @@ export function applyScenarios(input: RiskModelInput, scenarios: ScenarioShock[]
   });
 }
 
+/**
+ * Reverse stress test: solve for the BTC price at which the position's
+ * collateral ratio reaches a user-chosen target, in percent.
+ *
+ * This inverts the ratio formula:
+ *   price = (targetRatio / 100) × debt / btc
+ * which is the same algebra as computeLiquidationPriceUsd, with the
+ * target chosen by the user instead of the documented 110% threshold.
+ */
+export interface ReverseStressResult {
+  /** The user-selected ratio target, unchanged. */
+  targetRatioPct: number;
+  /** Price at which collateralRatio === targetRatioPct / 100. */
+  priceUsd: number;
+  /** Percent drop from spot required to reach the target, 0 when breached. */
+  dropFromSpotPct: number;
+  /** True when the position is already below the target at spot. */
+  alreadyBreached: boolean;
+}
+
+export function reverseStress(
+  input: PositionInput,
+  targetRatioPct: number,
+): ReverseStressResult {
+  const errors = validatePosition(input);
+  if (errors.length > 0) throw new InvalidPositionError(errors.join(" "));
+  if (!Number.isFinite(targetRatioPct) || targetRatioPct <= 0) {
+    throw new InvalidPositionError(
+      "Target collateral ratio must be a positive number.",
+    );
+  }
+  const priceUsd = computeLiquidationPriceUsd(
+    input.btcCollateral,
+    input.musdDebt,
+    targetRatioPct,
+  );
+  const alreadyBreached = priceUsd > input.btcPriceUsd;
+  const dropFromSpotPct = Math.max(0, (1 - priceUsd / input.btcPriceUsd) * 100);
+  return {
+    targetRatioPct,
+    priceUsd,
+    dropFromSpotPct,
+    alreadyBreached,
+  };
+}
+
 export function clampDropPct(dropPct: number): number {
   if (!Number.isFinite(dropPct)) return 0;
   return Math.min(100, Math.max(0, dropPct));

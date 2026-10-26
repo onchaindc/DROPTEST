@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import { RiskLab } from "@/components/risk-lab";
 
 export const metadata: Metadata = {
-  title: "Risk lab — DROPTEST",
+  title: "Stress Lab · DROPTEST",
   description:
-    "Stress-test hypothetical BTC-backed MUSD borrowing positions on Mezo with verified protocol parameters and live-adjustable shock scenarios.",
+    "Stress-test hypothetical BTC-backed MUSD borrowing positions on Mezo with documented protocol parameters. Find the liquidation price, headroom, and reverse stress breakeven for any crash.",
 };
 
 export default function LabPage() {

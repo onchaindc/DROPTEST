@@ -3,7 +3,9 @@
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
+  Legend,
   Line,
   LineChart,
   ReferenceDot,
@@ -208,6 +210,93 @@ interface ScenarioBarsProps {
   liquidationThresholdPct: number;
 }
 
+interface PathCompareChartProps {
+  /** Each compared path, already evaluated, colored for its line. */
+  paths: {
+    id: string;
+    name: string;
+    color: string;
+    points: { step: number; ratioPct: number | null }[];
+  }[];
+  thresholdPct: number;
+  /** Longest step count among the compared paths. */
+  maxStep: number;
+}
+
+/**
+ * Scenario Studio chart: one ratio line per named path on a shared
+ * step axis, with the threshold as a dashed horizontal reference.
+ * Paths stop at their own length, so a shorter line simply ends.
+ */
+export function PathCompareChart({
+  paths,
+  thresholdPct,
+  maxStep,
+}: PathCompareChartProps) {
+  // One row per step; each path carries its own ratio or nothing,
+  // which lets recharts draw lines of different lengths on one axis.
+  const rows = Array.from({ length: Math.max(maxStep, 1) }, (_, i) => {
+    const row: Record<string, number | null> = { step: i + 1 };
+    for (const p of paths) {
+      const pt = p.points[i];
+      row[p.id] = pt && pt.ratioPct !== null ? pt.ratioPct : null;
+    }
+    return row;
+  });
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={rows} margin={{ top: 12, right: 16, bottom: 4, left: 0 }}>
+        <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
+        <ReferenceLine
+          y={thresholdPct}
+          stroke="#b91c1c"
+          strokeDasharray="5 4"
+          label={{
+            value: `Liquidation ${thresholdPct}%`,
+            position: "insideTopLeft",
+            fontSize: 10,
+            fill: "#b91c1c",
+          }}
+        />
+        <XAxis
+          dataKey="step"
+          tick={axisStyle}
+          tickLine={false}
+          stroke={gridColor}
+          allowDecimals={false}
+          tickFormatter={(v: number) => `step ${v}`}
+        />
+        <YAxis
+          tick={axisStyle}
+          tickFormatter={(v: number) => `${Math.round(v)}%`}
+          tickLine={false}
+          width={44}
+          stroke={gridColor}
+        />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          isAnimationActive={false}
+        />
+        <Legend
+          wrapperStyle={{ fontSize: 11 }}
+          iconType="plainline"
+        />
+        {paths.map((p) => (
+          <Line
+            key={p.id}
+            dataKey={p.id}
+            name={p.name}
+            stroke={p.color}
+            strokeWidth={2}
+            dot={false}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
 /** Collateral ratio after each preset shock; bars cross threshold turn red. */
 export function ScenarioBars({ scenarios, liquidationThresholdPct }: ScenarioBarsProps) {
   const data = scenarios.map((s) => ({
