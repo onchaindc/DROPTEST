@@ -4,6 +4,20 @@
 
 DROPTEST is a Bitcoin collateral risk research tool for the [Mezo](https://mezo.org) ecosystem. It shows how a fall in BTC's price affects a hypothetical BTC-backed MUSD borrowing position: crash scenarios, the exact liquidation price, remaining headroom, and side-by-side path comparisons.
 
+**Live demo:** https://droptest-mezo.vercel.app
+
+Built for the Mezo buildathon. Strictly read-only. No wallets, no keys, no signing, no invented numbers.
+
+## For judges / demo path
+
+1. Open the [Stress Lab](https://droptest-mezo.vercel.app/lab) with the sample position (0.25 BTC, ~11,165 MUSD, $67k spot → 150% ratio).
+2. Watch the headline metrics and the liquidation price at the documented 110% threshold.
+3. Switch to **Shocks & reverse** — try the severity ladder and reverse stress (pick any ratio target).
+4. Open **Live reads** — sync the mainnet Skip BTC/USD oracle or look up any public address's open trove. Copy it into the hypothetical inputs (clearly labeled on-chain vs calculated).
+5. Visit [Scenario Studio](https://droptest-mezo.vercel.app/studio) to compare gradual / sudden / prolonged paths.
+6. Read [Research & Methodology](https://droptest-mezo.vercel.app/method) for the formulas, the 110% vs 150% Recovery Mode distinction, and every source.
+7. Generate a printable report from either tool.
+
 ## Highlights
 
 - **Tested pure risk engine** (`src/lib/engine/risk.ts`): collateral ratio, LTV, liquidation price, drop to liquidation, preset shocks, compounded crash timelines, and reverse stress testing (pick a ratio target, solve for the price). 36 unit tests in `src/lib/engine/` cover the math and its boundaries, including the exact "falls below 110%" threshold wording.
@@ -11,6 +25,8 @@ DROPTEST is a Bitcoin collateral risk research tool for the [Mezo](https://mezo.
 - **Scenario Studio** (`/studio`): compare up to three named hypothetical price paths with gradual decline, sudden crash, and prolonged bear market presets. Saved in local storage with reset and delete controls.
 - **Live Position Watch** (`/lab`): enter any public EVM address and read its real open trove from the Mezo mainnet TroveManager proxy — collateral, principal, accrued interest (incl. accrued-to-current-block), pending redistributed rewards, and the per-trove fixed interest rate via `getEntireDebtAndColl(address)`, `getTroveStatus(address)` and `Troves(address)`. Strictly read-only; an empty address is reported as "no position", and RPC/decode errors are never shown as positions. A fully loaded position can be copied into the hypothetical inputs with on-chain/calculated labels.
 - **Reverse stress testing**: enter any collateral ratio target and read the BTC price that reaches it, clearly labelled as a user what-if distinct from Mezo's documented 110% threshold.
+- **Historical context** (`src/lib/engine/historical.ts`): reference peak-to-trough drops (COVID 2020, 2021, 2022 bear) so users can ask "how would this have looked during X?" without treating history as a forecast.
+- **Interest sensitivity** (assumption only): simple fixed-rate projection over 30/90/180 days. Mezo documents a 1–5% range but does not publish a live rate, so this is never presented as protocol fact.
 - **Printable reports** (`/report`): a clean print-ready report with position inputs, assumptions, results, charts, sources, and generation time. No private data is included; save to PDF via the browser print dialog.
 - **Read-only Mezo mainnet oracle**: the documented Skip BTC/USD aggregator via viem (`latestRoundData()` + `decimals()` read from the chain — the deployed feed uses 18 decimals, not Chainlink-typical 8), after verifying the connected chain id (31612). No wallet, no keys, no signing. The reading shows its update time and a stale flag (the feed updates every block per the docs; >10 min is flagged); failures surface honestly and nothing is fabricated.
 - **Live reads surfaced on the overview**: the landing page carries the oracle badge and the Live Position Watch (mainnet by default) so the read-only flows are visible without opening the lab; the full experience with network selection sits in `/lab`.
