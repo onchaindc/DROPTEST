@@ -108,11 +108,24 @@ export default function Home() {
               How the model works
             </Link>
           </div>
-          <div className="mt-10 grid max-w-3xl grid-cols-2 gap-px overflow-hidden rounded-sm border border-hairline bg-hairline sm:grid-cols-4">
+          <p className="mt-5 text-xs leading-relaxed text-ink-faint">
+            <span className="mr-2 rounded-full border border-accent/30 bg-accent/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-accent">
+              Wave 2
+            </span>
+            Borrow costs, interest drag, rescue planning, breakpoints, historical
+            replay, live system health, shareable links and CSV export.{" "}
+            <Link
+              href="/updates"
+              className="text-accent underline underline-offset-2"
+            >
+              See what shipped →
+            </Link>
+          </p>
+          <div className="mt-6 grid max-w-3xl grid-cols-2 gap-px overflow-hidden rounded-sm border border-hairline bg-hairline sm:grid-cols-4">
             {[
               [`${INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT}%`, "Documented liquidation threshold"],
               ["3", "Compared price paths, plus shocks"],
-              ["2", "Live read flows: oracle + open troves"],
+              ["8", "Read-only protocol calls: oracle, troves, system"],
               ["0", "Wallet connections or invented data"],
             ].map(([k, v]) => (
               <div key={v} className="bg-surface-strong px-3 py-3">

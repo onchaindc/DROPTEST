@@ -7,6 +7,17 @@ import {
   SYSTEM_RECOVERY_MODE_TCR_PCT,
 } from "@/lib/mezo/verified";
 import { HISTORICAL_CRASHES } from "@/lib/engine/historical";
+import {
+  DOC_CONFLICTS,
+  DOCUMENTED_FEES,
+  FEES_SOURCE,
+  REDEMPTION_MECHANICS_SOURCE,
+} from "@/lib/engine/fees";
+import {
+  LIQUIDATION_DOCS_SOURCE,
+  LIQUIDATOR_REWARD_PCT,
+  LIQUIDATION_GAS_COMPENSATION_MUSD,
+} from "@/lib/engine/liquidation";
 
 export const metadata: Metadata = {
   title: "Research & Methodology · DROPTEST",
@@ -34,6 +45,16 @@ const DOC_LINKS = [
     label: "Mezo docs: oracle architecture",
     href: "https://mezo.org/docs/developers/architecture/oracles/",
     note: "The Skip BTC/USD aggregator address used for the read-only price call.",
+  },
+  {
+    label: "Mezo docs: MUSD fees and costs",
+    href: FEES_SOURCE,
+    note: "Issuance 0.1%, fixed interest 1–5%, redemption 0.75% (waived for borrowers), refinance, and the flat 200 MUSD gas deposit returned on close.",
+  },
+  {
+    label: "Mezo docs: MUSD redemptions",
+    href: REDEMPTION_MECHANICS_SOURCE,
+    note: "Redemption starts at the lowest collateral ratio above 110%, and requires the system TCR to be at or above the MCR.",
   },
   {
     label: "Mezo docs: getting started / connect",
@@ -229,13 +250,69 @@ export default function MethodPage() {
             back&quot; row.
           </p>
           <p className="mt-3 border-t border-hairline pt-3 text-xs leading-relaxed text-ink-soft">
-            Interest is deliberately excluded from the core engine. Mezo documents a governable{" "}
-            <span className="tabular">0.1%</span> borrowing charge and initial
-            fixed rates between <span className="tabular">1% and 5%</span>, but
-            the live rate is not published. A simple fixed-rate projection
-            (see historical.ts) is available as an explicit assumption only.
+            Interest is deliberately excluded from the shock and path math, so
+            every scenario compares positions with the same debt. Mezo documents
+            a governable <span className="tabular">0.1%</span> borrowing charge
+            and initial fixed rates between{" "}
+            <span className="tabular">1% and 5%</span>, but the live rate is not
+            published — so the Interest drag panel projects a rate you choose
+            (or the rate read from a loaded trove) and labels it an assumption.
           </p>
         </div>
+      </section>
+
+      {/* Documented fees */}
+      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+        <h2 className="text-lg font-semibold tracking-tight">
+          Documented fees, and what is derived from them
+        </h2>
+        <p className="mt-2 max-w-2xl text-xs leading-relaxed text-ink-soft">
+          The cost model quotes the official fee page. It does not assume those
+          values still hold on-chain: the Live reads section calls{" "}
+          <code className="tabular">borrowingRate()</code> and{" "}
+          <code className="tabular">redemptionRate()</code> on BorrowerOperations
+          and shows what the protocol answers right now, separately from the
+          documentation.
+        </p>
+        <dl className="mt-4 divide-y divide-hairline border-t border-hairline text-xs">
+          {DOCUMENTED_FEES.map((fee) => (
+            <div key={fee.id} className="flex flex-wrap items-baseline justify-between gap-x-3 py-2">
+              <dt className="font-medium text-ink">{fee.label}</dt>
+              <dd className="tabular text-ink-soft">{fee.value}</dd>
+              <dd className="w-full text-[11px] text-ink-faint sm:w-auto">
+                {fee.charged}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {DOC_CONFLICTS.map((conflict) => (
+          <p
+            key={conflict.topic}
+            className="mt-3 border-l-2 border-amber pl-3 text-[11px] leading-relaxed text-amber"
+          >
+            {conflict.topic}: the docs disagree ({conflict.first} vs{" "}
+            {conflict.second}). {conflict.note}
+          </p>
+        ))}
+        <p className="mt-4 border-t border-hairline pt-3 text-xs leading-relaxed text-ink-soft">
+          Two numbers in the app are <em>derived</em> from these documented
+          parameters rather than quoted from them. The liquidation split uses
+          the {LIQUIDATOR_REWARD_PCT}% liquidator share and the{" "}
+          {LIQUIDATION_GAS_COMPENSATION_MUSD} MUSD gas compensation; the
+          bad-debt price is the BTC price at which 99.5% of the seized
+          collateral no longer covers the debt plus that compensation. The
+          redemption what-if removes debt and BTC at par, and notes that the
+          app cannot see the rest of the system&apos;s trove order from a single
+          position. Sources:{" "}
+          <a href={FEES_SOURCE} target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-2">
+            fees
+          </a>{" "}
+          and{" "}
+          <a href={LIQUIDATION_DOCS_SOURCE} target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-2">
+            liquidation mechanics
+          </a>
+          .
+        </p>
       </section>
 
       {/* Historical reference */}
@@ -309,7 +386,7 @@ export default function MethodPage() {
       <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
         <h2 className="text-lg font-semibold tracking-tight">Live reads, read-only</h2>
         <p className="mt-3 max-w-2xl text-xs leading-relaxed text-ink-soft">
-          Two live integrations, both read-only eth_calls against{" "}
+          Read-only eth_calls against{" "}
           {MEZO_NETWORK.label} (chain id{" "}
           <code className="tabular">{MEZO_NETWORK.chainId}</code>, RPC{" "}
           <code className="break-all">{MEZO_NETWORK.rpc}</code>, all
@@ -325,9 +402,14 @@ export default function MethodPage() {
           </code>{" "}
           via <code className="tabular">getTroveStatus(address)</code>,{" "}
           <code className="tabular">getEntireDebtAndColl(address)</code>,{" "}
-          <code className="tabular">Troves(address)</code> and{" "}
-          <code className="tabular">MCR()</code>. Nothing is ever written:
-          no wallet, no key, no signing.
+          <code className="tabular">Troves(address)</code>,{" "}
+          <code className="tabular">MCR()</code> and{" "}
+          <code className="tabular">getTCR(price)</code>, plus{" "}
+          <code className="tabular">borrowingRate()</code> and{" "}
+          <code className="tabular">redemptionRate()</code> on BorrowerOperations.{" "}
+          Nothing is ever written: no wallet, no key, no signing. The system{" "}
+          panel turns those reads into the system collateral ratio, the Recovery
+          Mode flag at 150% and the redemption gate at the MCR.
         </p>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-relaxed text-ink-soft">
           <li>
@@ -377,10 +459,12 @@ export default function MethodPage() {
           Simulated is not real
         </h2>
         <p className="mt-2 max-w-2xl text-xs leading-relaxed text-ink-soft">
-          Every position on this site is hypothetical. DROPTEST never connects
-          a wallet, never reads a live trove, and does not present simulated
-          positions as real Mezo borrows. The engine, its tests, and this page
-          exist so you can check every claimed number yourself. Use{" "}
+          Every position on this site is hypothetical unless you explicitly
+          load one by public address. DROPTEST never connects a wallet and never
+          signs anything; the only live reads are view calls, and they never
+          present a simulated position as a real Mezo borrow. The engine, its
+          tests, and this page exist so you can check every claimed number
+          yourself. Use{" "}
           <Link href="/lab" className="text-accent underline underline-offset-2">
             the stress lab
           </Link>{" "}

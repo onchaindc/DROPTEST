@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -34,6 +34,13 @@ import {
 } from "@/components/live-position-watch";
 import { saveReportSnapshot, type ReportSnapshot } from "@/lib/report";
 import type { LabInputs } from "@/lib/engine/scenarios";
+import { CostAnalysis } from "@/components/cost-analysis";
+import { RescuePanel } from "@/components/rescue-panel";
+import { ProtocolHealth } from "@/components/protocol-health";
+import { breakpointLadder } from "@/lib/engine/rescue";
+import { replayHistoricalCrashes } from "@/lib/engine/historical";
+import { buildLabCsv, csvFilename } from "@/lib/export";
+import { encodeScenarioSearch, parseScenarioSearch } from "@/lib/share";
 
 type FieldKey = "btcCollateral" | "musdDebt" | "btcPriceUsd";
 
@@ -105,7 +112,14 @@ const ASSUMPTIONS = [
 const REVERSE_TARGET_MIN_PCT = 100;
 const REVERSE_TARGET_MAX_PCT = 500;
 
-type TabId = "position" | "charts" | "shocks" | "live" | "assumptions";
+type TabId =
+  | "position"
+  | "charts"
+  | "shocks"
+  | "costs"
+  | "rescue"
+  | "live"
+  | "assumptions";
 
 const TABS: { id: TabId; label: string; blurb: string }[] = [
   {
@@ -124,9 +138,22 @@ const TABS: { id: TabId; label: string; blurb: string }[] = [
     blurb: "Custom shock, preset severity ladder, and the reverse stress test.",
   },
   {
+    id: "costs",
+    label: "Costs & interest",
+    blurb:
+      "Documented fees, interest drag on the liquidation price, the liquidation split, and redemption exposure.",
+  },
+  {
+    id: "rescue",
+    label: "Rescue & history",
+    blurb:
+      "Top up BTC or repay MUSD to survive a chosen crash, breakpoints by ratio, and historical replay.",
+  },
+  {
     id: "live",
     label: "Live reads",
-    blurb: "Oracle price sync and read-only live trove lookup by address.",
+    blurb:
+      "Oracle sync, read-only trove lookup by address, and live system health (TCR, MCR, fees).",
   },
   {
     id: "assumptions",
@@ -219,6 +246,12 @@ export function RiskLab() {
   // The lab is one stateful engine rendered across tabbed sections, so
   // an input change on one tab updates every other tab instantly.
   const [tab, setTab] = useState<TabId>("position");
+  // Cost/interest assumption, rescue sizing, and the share-link status.
+  const [aprPct, setAprPct] = useState(3);
+  const [liveAprPct, setLiveAprPct] = useState<number | null>(null);
+  const [rescueDrop, setRescueDrop] = useState(30);
+  const [rescueTarget, setRescueTarget] = useState(150);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
 
   const parsed = useMemo<{ fields: ParsedInputs; threshold: number }>(() => ({
     fields: {
@@ -351,6 +384,10 @@ export function RiskLab() {
       btcPriceUsd: String(Math.round(filled.input.btcPriceUsd * 100) / 100),
     });
     setSpotSource("oracle");
+    // A live trove carries its own fixed rate; use it for the drag table
+    // instead of leaving the user on a generic assumption.
+    setLiveAprPct(filled.annualRatePct ?? null);
+    if (filled.annualRatePct !== undefined) setAprPct(filled.annualRatePct);
     setTab("position");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
@@ -366,6 +403,11 @@ export function RiskLab() {
     setCustomDrop(50);
     setTargetRatioInput("130");
     setSpotSource("manual");
+    setAprPct(3);
+    setLiveAprPct(null);
+    setRescueDrop(30);
+    setRescueTarget(150);
+    setShareStatus(null);
   }, []);
 
   const buildSnapshot = useCallback((): ReportSnapshot | null => {
@@ -376,8 +418,12 @@ export function RiskLab() {
       inputs: validInputs,
       customDropPct: customDrop,
       timelineDropsPct: timelineDrops,
+      aprPct,
+      rescueDropPct: rescueDrop,
+      rescueTargetPct: rescueTarget,
+      borrowMusd: validInputs.musdDebt,
     };
-  }, [validInputs, customDrop, timelineDrops]);
+  }, [validInputs, customDrop, timelineDrops, aprPct, rescueDrop, rescueTarget]);
 
   const openReport = useCallback(() => {
     const snapshot = buildSnapshot();
@@ -385,6 +431,80 @@ export function RiskLab() {
     if (!saveReportSnapshot(snapshot)) return;
     router.push("/report");
   }, [buildSnapshot, router]);
+
+  /** Copy a link that reproduces this exact scenario on open. */
+  const copyLink = useCallback(async () => {
+    if (!validInputs) return;
+    const search = encodeScenarioSearch({
+      ...validInputs,
+      customDropPct: customDrop,
+    });
+    const url = `${window.location.origin}${window.location.pathname}?${search}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareStatus("Scenario link copied to the clipboard.");
+    } catch {
+      // Clipboard access can be blocked; show the link so it can be copied.
+      setShareStatus(url);
+    }
+  }, [validInputs, customDrop]);
+
+  /** One flat CSV: position, preset shocks, timeline, breakpoints, history. */
+  const exportCsv = useCallback(() => {
+    if (!validInputs) return;
+    const csv = buildLabCsv({
+      generatedAt: new Date().toISOString(),
+      position: validInputs,
+      scenarios: scenarioStates,
+      timeline: timelineStates.map((state, i) => ({
+        label: timelineStages[i]?.label ?? `Stage ${i + 1}`,
+        priceUsd: state.shockedPriceUsd,
+        cumulativeDropPct: state.dropPct,
+        collateralRatio: state.collateralRatio,
+        liquidated: state.liquidated,
+      })),
+      breakpoints: breakpointLadder(validInputs),
+      historical: replayHistoricalCrashes(validInputs).map((row) => ({
+        name: row.crash.name,
+        dropPct: row.crash.dropPct,
+        shockedPriceUsd: row.shockedPriceUsd,
+        collateralRatio: row.collateralRatio,
+        liquidated: row.liquidated,
+      })),
+    });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = csvFilename();
+    link.click();
+    URL.revokeObjectURL(url);
+    setShareStatus(`Exported ${link.download}`);
+  }, [validInputs, scenarioStates, timelineStates, timelineStages]);
+
+  // Restore a shared scenario once after mount. Deferred so the first
+  // paint matches the server-rendered defaults (no hydration mismatch).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const linked = parseScenarioSearch(window.location.search);
+      if (!linked) return;
+      setFields({
+        btcCollateral: String(linked.btcCollateral),
+        musdDebt: String(linked.musdDebt),
+        btcPriceUsd: String(linked.btcPriceUsd),
+      });
+      setThreshold(linked.liquidationThresholdPct);
+      if (linked.customDropPct !== undefined) setCustomDrop(linked.customDropPct);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Clear the share/export confirmation after a few seconds.
+  useEffect(() => {
+    if (shareStatus === null) return;
+    const t = setTimeout(() => setShareStatus(null), 8000);
+    return () => clearTimeout(t);
+  }, [shareStatus]);
 
   const timelineAllLiquidated = timelineStates.some((s) => s.liquidated);
 
@@ -401,7 +521,23 @@ export function RiskLab() {
             touches a live position.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void copyLink()}
+            disabled={!validInputs}
+            className="w-fit rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Copy link
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={!validInputs}
+            className="w-fit rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Export CSV
+          </button>
           <button
             type="button"
             onClick={reset}
@@ -419,6 +555,19 @@ export function RiskLab() {
           </button>
         </div>
       </div>
+
+      {shareStatus !== null && (
+        <p className="mb-6 break-all rounded-sm border border-hairline bg-surface-strong px-3 py-2 text-xs text-ink-soft">
+          {shareStatus.startsWith("http") ? (
+            <>
+              Clipboard unavailable. Copy this link:{" "}
+              <code className="tabular text-ink">{shareStatus}</code>
+            </>
+          ) : (
+            shareStatus
+          )}
+        </p>
+      )}
 
       <LabTabNav tab={tab} onTab={setTab} className="mb-8 w-full max-w-3xl" />
 
@@ -819,6 +968,38 @@ export function RiskLab() {
         <SectionMissingState onOpenPosition={() => setTab("position")} />
       )}
 
+      {tab === "costs" && validInputs && (
+        <CostAnalysis
+          inputs={validInputs}
+          aprPct={aprPct}
+          onAprChange={setAprPct}
+          liveAprSource={
+            liveAprPct !== null
+              ? `the loaded trove (${liveAprPct.toFixed(2)}% fixed on-chain)`
+              : null
+          }
+        />
+      )}
+
+      {tab === "costs" && !validInputs && (
+        <SectionMissingState onOpenPosition={() => setTab("position")} />
+      )}
+
+      {tab === "rescue" && validInputs && (
+        <RescuePanel
+          inputs={validInputs}
+          shockDropPct={rescueDrop}
+          onShockChange={setRescueDrop}
+          targetRatioPct={rescueTarget}
+          onTargetChange={setRescueTarget}
+          onExportCsv={exportCsv}
+        />
+      )}
+
+      {tab === "rescue" && !validInputs && (
+        <SectionMissingState onOpenPosition={() => setTab("position")} />
+      )}
+
       {tab === "live" && (
         <section className="border border-hairline bg-surface-strong p-4 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -859,6 +1040,9 @@ export function RiskLab() {
         <div className="grid gap-4 md:grid-cols-2">
           <MezoOracleBadge network={network} onPrice={syncFromOracle} />
           <LivePositionWatch network={network} onFill={fillFromLive} />
+        </div>
+        <div className="mt-4">
+          <ProtocolHealth network={network} />
         </div>
         <div className="flex flex-col gap-3 border border-hairline bg-background p-3 text-xs leading-relaxed text-ink-faint">
             <p>

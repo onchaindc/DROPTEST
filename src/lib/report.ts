@@ -16,6 +16,14 @@ export interface ReportSnapshot {
   customDropPct?: number;
   /** Lab: the editable timeline stage drops in percent. */
   timelineDropsPct?: number[];
+  /** Lab: annual interest assumption used for the drag table, in percent. */
+  aprPct?: number;
+  /** Lab: shock (percent drop) the rescue plan was sized for. */
+  rescueDropPct?: number;
+  /** Lab: ratio target the rescue plan was sized to hold. */
+  rescueTargetPct?: number;
+  /** Lab: MUSD amount used for the borrow-cost estimate. */
+  borrowMusd?: number;
   /** Studio: copies of the compared price paths. */
   paths?: {
     name: string;
@@ -90,6 +98,26 @@ export function sanitizeReportSnapshot(parsed: unknown): ReportSnapshot | null {
     },
   };
   if (isFinitePct(p.customDropPct)) out.customDropPct = p.customDropPct;
+  if (
+    typeof p.aprPct === "number" &&
+    Number.isFinite(p.aprPct) &&
+    p.aprPct >= 0 &&
+    p.aprPct < 100
+  ) {
+    out.aprPct = p.aprPct;
+  }
+  if (isFinitePct(p.rescueDropPct)) out.rescueDropPct = p.rescueDropPct;
+  if (
+    typeof p.rescueTargetPct === "number" &&
+    Number.isFinite(p.rescueTargetPct) &&
+    p.rescueTargetPct >= 100 &&
+    p.rescueTargetPct <= 1000
+  ) {
+    out.rescueTargetPct = p.rescueTargetPct;
+  }
+  if (isFinitePositive(p.borrowMusd) && p.borrowMusd <= 1e12) {
+    out.borrowMusd = p.borrowMusd;
+  }
   if (
     Array.isArray(p.timelineDropsPct) &&
     p.timelineDropsPct.length > 0 &&

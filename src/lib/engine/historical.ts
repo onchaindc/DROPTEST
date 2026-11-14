@@ -10,6 +10,13 @@
  * market history; exact start/end dates and measurement windows vary.
  */
 
+import {
+  clampDropPct,
+  computeLiquidationPriceUsd,
+  stateAtPrice,
+  type RiskModelInput,
+} from "./risk";
+
 export interface HistoricalCrash {
   id: string;
   name: string;
@@ -71,3 +78,63 @@ export function projectDebt(params: {
 }
 
 export const INTEREST_HORIZONS = [30, 90, 180] as const;
+
+/**
+ * Replay every documented historical drawdown against one position.
+ *
+ * This is context, not a forecast: each row applies the reference drop
+ * once, at the current spot price, so the reader can ask "what would
+ * this position have looked like through that drawdown?". The math is
+ * the same collateral-ratio formula the engine tests.
+ */
+export interface CrashReplay {
+  crash: HistoricalCrash;
+  shockedPriceUsd: number;
+  collateralValueUsd: number;
+  collateralRatio: number;
+  /** Strictly below the configured threshold, matching engine wording. */
+  liquidated: boolean;
+  /** Further drop a surviving position could absorb from the shocked price. */
+  headroomDropPct: number;
+}
+
+export function replayHistoricalCrashes(
+  input: RiskModelInput,
+  crashes: readonly HistoricalCrash[] = HISTORICAL_CRASHES,
+): CrashReplay[] {
+  const { btcCollateral, musdDebt, btcPriceUsd, liquidationThresholdPct } = input;
+  if (
+    !Number.isFinite(btcCollateral) ||
+    !Number.isFinite(musdDebt) ||
+    !Number.isFinite(btcPriceUsd) ||
+    !Number.isFinite(liquidationThresholdPct) ||
+    btcCollateral <= 0 ||
+    musdDebt <= 0 ||
+    btcPriceUsd <= 0 ||
+    liquidationThresholdPct <= 0
+  ) {
+    return [];
+  }
+  const liquidationPriceUsd = computeLiquidationPriceUsd(
+    btcCollateral,
+    musdDebt,
+    liquidationThresholdPct,
+  );
+  return crashes.map((crash) => {
+    const shockedPriceUsd =
+      btcPriceUsd * (1 - clampDropPct(crash.dropPct) / 100);
+    const state = stateAtPrice(btcCollateral, musdDebt, shockedPriceUsd);
+    const liquidated = state.collateralRatio < liquidationThresholdPct / 100;
+    return {
+      crash,
+      shockedPriceUsd,
+      collateralValueUsd: state.collateralValueUsd,
+      collateralRatio: state.collateralRatio,
+      liquidated,
+      headroomDropPct:
+        shockedPriceUsd <= liquidationPriceUsd
+          ? 0
+          : (1 - liquidationPriceUsd / shockedPriceUsd) * 100,
+    };
+  });
+}

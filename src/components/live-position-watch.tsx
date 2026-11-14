@@ -34,6 +34,8 @@ export interface FilledLivePosition {
   /** Block the trove was read at. */
   blockNumber: number;
   networkLabel: string;
+  /** The trove's own fixed interest rate, in percent, when readable. */
+  annualRatePct?: number;
 }
 
 export interface LivePositionWatchProps {
@@ -174,6 +176,10 @@ export function LivePositionWatch({ network, onFill }: LivePositionWatchProps) {
       oracleUpdatedAtMs: state.oracle.updatedAtMs,
       blockNumber: state.trove.blockNumber,
       networkLabel: network.label,
+      annualRatePct:
+        state.trove.amounts.interestRateBps !== null
+          ? state.trove.amounts.interestRateBps / 100
+          : undefined,
     });
   }, [fillReady, onFill, state, network.label]);
 

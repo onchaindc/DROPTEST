@@ -24,6 +24,17 @@ export function SiteNav() {
           className="flex shrink-0 items-center gap-4 text-sm sm:gap-6"
         >
           <Link
+            href="/updates"
+            aria-current={pathname === "/updates" ? "page" : undefined}
+            className={`hidden transition-colors sm:inline ${
+              pathname === "/updates"
+                ? "font-medium text-ink"
+                : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            Updates
+          </Link>
+          <Link
             href="/"
             aria-current={pathname === "/" ? "page" : undefined}
             className={`transition-colors ${

@@ -119,4 +119,38 @@ describe("sanitizeReportSnapshot", () => {
   it("keeps the studio storage key a string constant", () => {
     expect(typeof STUDIO_STORAGE_KEY).toBe("string");
   });
+
+  it("keeps valid wave-2 assumption fields", () => {
+    const out = sanitizeReportSnapshot({
+      ...VALID,
+      aprPct: 3.25,
+      rescueDropPct: 30,
+      rescueTargetPct: 150,
+      borrowMusd: 11_165,
+    });
+    expect(out?.aprPct).toBe(3.25);
+    expect(out?.rescueDropPct).toBe(30);
+    expect(out?.rescueTargetPct).toBe(150);
+    expect(out?.borrowMusd).toBe(11_165);
+  });
+
+  it("drops out-of-range wave-2 fields without rejecting the report", () => {
+    const out = sanitizeReportSnapshot({
+      ...VALID,
+      aprPct: 120,
+      rescueDropPct: 150,
+      rescueTargetPct: 50,
+      borrowMusd: -1,
+    });
+    expect(out).not.toBeNull();
+    expect(out?.aprPct).toBeUndefined();
+    expect(out?.rescueDropPct).toBeUndefined();
+    expect(out?.rescueTargetPct).toBeUndefined();
+    expect(out?.borrowMusd).toBeUndefined();
+  });
+
+  it("accepts a zero interest assumption but not a negative one", () => {
+    expect(sanitizeReportSnapshot({ ...VALID, aprPct: 0 })?.aprPct).toBe(0);
+    expect(sanitizeReportSnapshot({ ...VALID, aprPct: -1 })?.aprPct).toBeUndefined();
+  });
 });

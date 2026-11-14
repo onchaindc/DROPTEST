@@ -1,8 +1,11 @@
 export function usd(value: number, maxDigits = 2): string {
   if (!Number.isFinite(value)) return "-";
+  // Intl throws when minimum > maximum, which happens for small values
+  // formatted with 0 fraction digits — clamp instead of guessing.
+  const minimumFractionDigits = Math.min(value < 100 ? 2 : 0, maxDigits);
   return value.toLocaleString(undefined, {
     maximumFractionDigits: maxDigits,
-    minimumFractionDigits: value < 100 ? 2 : 0,
+    minimumFractionDigits,
     style: "currency",
     currency: "USD",
   });
@@ -21,6 +24,15 @@ export function pct(value: number): string {
 export function btc(amount: number): string {
   if (!Number.isFinite(amount)) return "-";
   return `${amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} BTC`;
+}
+
+/** MUSD amounts are shown with their unit, never as a bare number. */
+export function musd(amount: number, maxDigits = 2): string {
+  if (!Number.isFinite(amount)) return "-";
+  return `${amount.toLocaleString(undefined, {
+    maximumFractionDigits: maxDigits,
+    minimumFractionDigits: maxDigits === 0 ? 0 : 2,
+  })} MUSD`;
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {

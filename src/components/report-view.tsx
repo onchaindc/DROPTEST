@@ -13,6 +13,14 @@ import {
 } from "@/lib/engine/risk";
 import { analyzePricePath } from "@/lib/engine/paths";
 import { PRESET_SCENARIOS } from "@/lib/engine/scenarios";
+import { borrowingCosts } from "@/lib/engine/fees";
+import { projectInterest } from "@/lib/engine/interest";
+import { breakpointLadder, planRescue } from "@/lib/engine/rescue";
+import {
+  LIQUIDATOR_REWARD_PCT,
+  liquidationStatement,
+} from "@/lib/engine/liquidation";
+import { replayHistoricalCrashes } from "@/lib/engine/historical";
 import {
   DOC_CONFLICT_NOTE,
   INDIVIDUAL_MIN_COLLATERAL_RATIO_PCT,
@@ -124,6 +132,20 @@ function ReportContent({
       return null;
     }
   }, [inputs]);
+
+  const aprPct = snapshot.aprPct ?? 3;
+  const interest = useMemo(() => projectInterest(inputs, aprPct), [inputs, aprPct]);
+  const borrowMusd = snapshot.borrowMusd ?? inputs.musdDebt;
+  const costs = useMemo(() => borrowingCosts(borrowMusd), [borrowMusd]);
+  const rescueDrop = snapshot.rescueDropPct ?? snapshot.customDropPct ?? 30;
+  const rescueTarget = snapshot.rescueTargetPct ?? 150;
+  const rescue = useMemo(
+    () => planRescue(inputs, rescueDrop, rescueTarget),
+    [inputs, rescueDrop, rescueTarget],
+  );
+  const ladder = useMemo(() => breakpointLadder(inputs), [inputs]);
+  const statement = useMemo(() => liquidationStatement(inputs), [inputs]);
+  const replay = useMemo(() => replayHistoricalCrashes(inputs), [inputs]);
 
   const studioPaths = useMemo(() => {
     if (!snapshot.paths || snapshot.paths.length === 0) return null;
@@ -255,6 +277,190 @@ function ReportContent({
               </div>
             ))}
           </dl>
+        </section>
+
+        {/* Costs, interest and structure */}
+        <section className="mt-6">
+          <h3 className="text-sm font-semibold">Costs, interest and liquidation structure</h3>
+          <div className="mt-2 grid gap-6 lg:grid-cols-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-ink-faint">
+                Documented fee schedule{costs ? `, on ${usd(borrowMusd, 0)} borrowed` : ""}
+              </p>
+              {costs ? (
+                <table className="mt-1 w-full text-xs">
+                  <tbody>
+                    {[
+                      ["Issuance fee (0.1%)", usd(costs.issuanceFeeMusd, 2)],
+                      ["Net MUSD received", usd(costs.netMusdReceived, 2)],
+                      ["Debt if the fee is capitalised", usd(costs.debtIfFeeCapitalisedMusd, 2)],
+                      ["Gas deposit locked (returned on close)", usd(costs.gasDepositMusd, 0)],
+                      ["Fee + deposit as a share of the borrow", fmtPct(costs.upfrontCostPct)],
+                    ].map(([term, value]) => (
+                      <tr key={term} className="border-t border-hairline">
+                        <td className="py-1.5 pr-4 text-ink-faint">{term}</td>
+                        <td className="tabular py-1.5 font-medium">{value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="mt-1 text-xs text-ink-faint">No fee estimate for these inputs.</p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-ink-faint">
+                Interest drag at an assumed {aprPct.toFixed(2)}% APR
+              </p>
+              {interest ? (
+                <table className="mt-1 w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-hairline text-left text-ink-faint">
+                      <th className="py-1.5 pr-2 font-medium">Horizon</th>
+                      <th className="py-1.5 pr-2 font-medium">Debt</th>
+                      <th className="py-1.5 pr-2 font-medium">Ratio</th>
+                      <th className="py-1.5 font-medium">Liquidation price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {interest.horizons.map((h) => (
+                      <tr key={h.days} className="border-b border-hairline last:border-0">
+                        <td className="py-1.5 pr-2">{h.days} days</td>
+                        <td className="tabular py-1.5 pr-2">{usd(h.debtMusd, 0)}</td>
+                        <td className="tabular py-1.5 pr-2">{fmtRatio(h.collateralRatio)}</td>
+                        <td className="tabular py-1.5">{usd(h.liquidationPriceUsd, 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="mt-1 text-xs text-ink-faint">Not modelled for these inputs.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-6 lg:grid-cols-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-ink-faint">
+                Rescue plan for a {rescueDrop}% crash, holding {rescueTarget}%
+              </p>
+              {rescue ? (
+                <table className="mt-1 w-full text-xs">
+                  <tbody>
+                    {[
+                      ["Price at the shock", usd(rescue.shockedPriceUsd, 0)],
+                      ["Ratio if nothing changes", fmtRatio(rescue.ratioAtShock)],
+                      [
+                        rescue.survives ? "Holds the target" : "BTC to add",
+                        rescue.survives ? "Yes" : `${rescue.btcToAdd.toFixed(6)} BTC`,
+                      ],
+                      [
+                        rescue.survives ? "Further drop available" : "or MUSD to repay",
+                        rescue.survives
+                          ? fmtPct(rescue.headroomDropPct)
+                          : usd(rescue.musdToRepay, 2),
+                      ],
+                    ].map(([term, value]) => (
+                      <tr key={term} className="border-t border-hairline">
+                        <td className="py-1.5 pr-4 text-ink-faint">{term}</td>
+                        <td className="tabular py-1.5 font-medium">{value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="mt-1 text-xs text-ink-faint">No plan for these inputs.</p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-ink-faint">
+                Breakpoint ladder
+              </p>
+              <table className="mt-1 w-full text-xs">
+                <thead>
+                  <tr className="border-b border-hairline text-left text-ink-faint">
+                    <th className="py-1.5 pr-2 font-medium">Ratio</th>
+                    <th className="py-1.5 pr-2 font-medium">BTC price</th>
+                    <th className="py-1.5 font-medium">From spot</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ladder.map((b) => (
+                    <tr key={b.targetRatioPct} className="border-b border-hairline last:border-0">
+                      <td className="tabular py-1.5 pr-2">{b.targetRatioPct}%</td>
+                      <td className="tabular py-1.5 pr-2">{usd(b.priceUsd, 0)}</td>
+                      <td className="tabular py-1.5 text-ink-soft">
+                        {b.alreadyBreached ? "above target" : `−${fmtPct(b.dropFromSpotPct)}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        {/* Liquidation statement */}
+        <section className="mt-6">
+          <h3 className="text-sm font-semibold">What a liquidation splits into</h3>
+          {statement ? (
+            <div className="mt-2 grid grid-cols-2 gap-px border bg-hairline sm:grid-cols-3">
+              {[
+                ["Collateral value seized", usd(statement.collateralValueUsd, 0)],
+                [`Liquidator reward (${LIQUIDATOR_REWARD_PCT}%)`, usd(statement.liquidatorRewardUsd, 0)],
+                ["Gas compensation", usd(statement.gasCompensationMusd, 0)],
+                ["To the Stability Pool", usd(statement.stabilityPoolCollateralUsd, 0)],
+                ["Pool surplus after debt and gas", usd(statement.surplusAfterDebtUsd, 0)],
+                ["Bad-debt price (derived)", usd(statement.badDebtPriceUsd, 0)],
+              ].map(([term, value]) => (
+                <div key={term} className="bg-surface-strong px-3 py-2.5">
+                  <dt className="text-[10px] uppercase tracking-widest text-ink-faint">{term}</dt>
+                  <dd className="tabular mt-1 text-sm font-medium">{value}</dd>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-ink-faint">No statement for these inputs.</p>
+          )}
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+            The docs describe a liquidator reward and a 200 MUSD gas
+            compensation, and publish no borrower residual, so this report
+            models the borrower keeping nothing. The bad-debt price is algebra
+            over documented parameters.
+          </p>
+        </section>
+
+        {/* Historical replay */}
+        <section className="mt-6">
+          <h3 className="text-sm font-semibold">Historical drawdown replay</h3>
+          <table className="mt-2 w-full text-xs">
+            <thead>
+              <tr className="border-b border-hairline text-left text-ink-faint">
+                <th className="py-1.5 pr-2 font-medium">Drawdown</th>
+                <th className="py-1.5 pr-2 font-medium">Drop</th>
+                <th className="py-1.5 pr-2 font-medium">Price after</th>
+                <th className="py-1.5 pr-2 font-medium">Ratio</th>
+                <th className="py-1.5 font-medium">Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {replay.map((row) => (
+                <tr key={row.crash.id} className="border-b border-hairline last:border-0">
+                  <td className="py-1.5 pr-2">{row.crash.name} <span className="text-ink-faint">({row.crash.period})</span></td>
+                  <td className="tabular py-1.5 pr-2">−{row.crash.dropPct}%</td>
+                  <td className="tabular py-1.5 pr-2">{usd(row.shockedPriceUsd, 0)}</td>
+                  <td className="tabular py-1.5 pr-2">{fmtRatio(row.collateralRatio)}</td>
+                  <td className={`py-1.5 ${row.liquidated ? "text-risk" : "text-ink-soft"}`}>
+                    {row.liquidated ? "liquidatable" : `survives, ${fmtPct(row.headroomDropPct)} left`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-1 text-[11px] text-ink-faint">
+            Reference drawdowns applied once from the entered spot price. Context,
+            not a forecast.
+          </p>
         </section>
 
         {/* Scenario results */}
@@ -395,10 +601,11 @@ function ReportContent({
               recovers nothing from a liquidated position.
             </li>
             <li>
-              Interest: the model does not accrue interest. Mezo documents
-              initial fixed rates of 1% to 5% and a 0.1% borrowing charge, but
-              the live rate is not published, so the entered debt is treated
-              as static.
+              Interest: the shock and path math treats debt as static. Mezo
+              documents fixed rates of 1% to 5% and a 0.1% issuance fee, but the
+              live rate is not published, so the interest drag above is an
+              explicit {aprPct.toFixed(2)}% assumption (or the loaded trove&apos;s
+              own on-chain rate), never a protocol fact.
             </li>
             <li>
               Prices: the spot price is either typed by hand or read once from
@@ -434,9 +641,10 @@ function ReportContent({
 
         <footer className="mt-6 border-t border-hairline pt-3 text-[10px] leading-relaxed text-ink-faint">
           <p>
-            Hypothetical analysis only. DROPTEST does not connect to wallets,
-            does not read live positions, and is not financial advice. Preset
-            shocks and paths are illustrative defaults, not predictions.
+            Hypothetical analysis only. DROPTEST never connects to a wallet and
+            never signs anything; its Mezo reads are read-only view calls.
+            Preset shocks and paths are illustrative defaults, not predictions.
+            Not financial advice.
           </p>
           <p className="mt-1">Generated {shownGenerated} · DROPTEST</p>
         </footer>

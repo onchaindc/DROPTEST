@@ -47,13 +47,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/method" className="transition-colors hover:text-ink">
                 Research &amp; Methodology
               </Link>
+              <Link href="/updates" className="transition-colors hover:text-ink">
+                Wave 2 updates
+              </Link>
             </nav>
             <p>
-              DROPTEST models hypothetical positions. It does not connect to
-              wallets, read live borrows, or give financial advice. Protocol
-              parameters come from official Mezo documentation and are cited
-              inline; anything the documentation does not state is treated as
-              an assumption you can change.
+              DROPTEST models hypothetical positions and reads Mezo mainnet
+              read-only: no wallet connection, no signing. Protocol parameters
+              come from official Mezo documentation and are cited inline;
+              anything the documentation does not state is treated as an
+              assumption you can change. Not financial advice.
             </p>
           </div>
         </footer>
