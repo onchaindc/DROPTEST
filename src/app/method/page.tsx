@@ -6,6 +6,7 @@ import {
   DEFAULT_MEZO_NETWORK as MEZO_NETWORK,
   SYSTEM_RECOVERY_MODE_TCR_PCT,
 } from "@/lib/mezo/verified";
+import { HISTORICAL_CRASHES } from "@/lib/engine/historical";
 
 export const metadata: Metadata = {
   title: "Research & Methodology · DROPTEST",
@@ -89,6 +90,11 @@ const adjustableAssumptions = [
     value: "Preset shocks and paths",
     label: "Static percent defaults",
     note: "Illustrative severities and shapes, not predictions and not protocol data.",
+  },
+  {
+    value: "Interest rate (optional)",
+    label: "Simple fixed-rate assumption",
+    note: "1–5% range is documented; the live rate is not published. A projection over 30/90/180 days is therefore an explicit user assumption, never a protocol fact.",
   },
 ];
 
@@ -223,13 +229,39 @@ export default function MethodPage() {
             back&quot; row.
           </p>
           <p className="mt-3 border-t border-hairline pt-3 text-xs leading-relaxed text-ink-soft">
-            Interest is deliberately excluded. Mezo documents a governable{" "}
+            Interest is deliberately excluded from the core engine. Mezo documents a governable{" "}
             <span className="tabular">0.1%</span> borrowing charge and initial
             fixed rates between <span className="tabular">1% and 5%</span>, but
-            the live rate is not published, so the tool stresses the debt
-            number you enter rather than inventing accrual.
+            the live rate is not published. A simple fixed-rate projection
+            (see historical.ts) is available as an explicit assumption only.
           </p>
         </div>
+      </section>
+
+      {/* Historical reference */}
+      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+        <h2 className="text-lg font-semibold tracking-tight">
+          Historical reference drops
+        </h2>
+        <p className="mt-2 max-w-2xl text-xs leading-relaxed text-ink-soft">
+          These are educational context only — approximate peak-to-trough
+          figures so you can ask how a position would have looked during past
+          drawdowns. They are not predictions, not protocol data, and not
+          wired into the risk engine.
+        </p>
+        <ul className="mt-4 divide-y divide-hairline border-t border-hairline text-sm">
+          {HISTORICAL_CRASHES.map((h) => (
+            <li key={h.id} className="py-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="font-medium text-ink">{h.name}</span>
+                <span className="tabular text-xs text-ink-faint">
+                  −{h.dropPct}% · {h.period}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-ink-soft">{h.note}</p>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {/* Verified vs adjustable */}
