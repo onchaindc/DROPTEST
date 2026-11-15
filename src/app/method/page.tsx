@@ -123,8 +123,9 @@ export default function MethodPage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <header className="mb-10">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Research & Methodology
+        <p className="eyebrow">Methodology</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+          Research &amp; Methodology
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
           Every number DROPTEST shows, where it comes from, and what it does
@@ -135,7 +136,7 @@ export default function MethodPage() {
       </header>
 
       {/* Formulas */}
-      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+      <section className="card mb-8 p-4 sm:p-6">
         <h2 className="text-lg font-semibold tracking-tight">The formulas</h2>
         <p className="mt-2 max-w-2xl text-xs leading-relaxed text-ink-soft">
           Three formulas cover everything on the site. They are implemented as
@@ -187,7 +188,7 @@ export default function MethodPage() {
 
       {/* Threshold vs Recovery Mode */}
       <section className="mb-12 grid gap-6 lg:grid-cols-2">
-        <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
+        <div className="card p-4 sm:p-6">
           <h2 className="text-lg font-semibold tracking-tight">
             The threshold, and why Recovery Mode is different
           </h2>
@@ -230,7 +231,7 @@ export default function MethodPage() {
           </p>
         </div>
 
-        <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
+        <div className="card p-4 sm:p-6">
           <h2 className="text-lg font-semibold tracking-tight">
             Liquidation mechanics and what the model shows
           </h2>
@@ -262,7 +263,7 @@ export default function MethodPage() {
       </section>
 
       {/* Documented fees */}
-      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+      <section className="card mb-8 p-4 sm:p-6">
         <h2 className="text-lg font-semibold tracking-tight">
           Documented fees, and what is derived from them
         </h2>
@@ -316,7 +317,7 @@ export default function MethodPage() {
       </section>
 
       {/* Historical reference */}
-      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+      <section className="card mb-8 p-4 sm:p-6">
         <h2 className="text-lg font-semibold tracking-tight">
           Historical reference drops
         </h2>
@@ -342,7 +343,7 @@ export default function MethodPage() {
       </section>
 
       {/* Verified vs adjustable */}
-      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+      <section className="card mb-8 p-4 sm:p-6">
         <h2 className="text-lg font-semibold tracking-tight">
           Verified parameters vs adjustable assumptions
         </h2>
@@ -383,7 +384,7 @@ export default function MethodPage() {
       </section>
 
       {/* Oracle */}
-      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+      <section className="card mb-8 p-4 sm:p-6">
         <h2 className="text-lg font-semibold tracking-tight">Live reads, read-only</h2>
         <p className="mt-3 max-w-2xl text-xs leading-relaxed text-ink-soft">
           Read-only eth_calls against{" "}
@@ -431,7 +432,7 @@ export default function MethodPage() {
       </section>
 
       {/* Sources */}
-      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+      <section className="card mb-8 p-4 sm:p-6">
         <h2 className="text-lg font-semibold tracking-tight">Sources</h2>
         <ul className="mt-4 grid gap-3 md:grid-cols-2">
           {DOC_LINKS.map((d) => (
@@ -454,7 +455,7 @@ export default function MethodPage() {
       </section>
 
       {/* Closing */}
-      <section className="mb-4 border border-hairline bg-surface-strong p-4 sm:p-6">
+      <section className="card mb-4 p-4 sm:p-6">
         <h2 className="text-lg font-semibold tracking-tight">
           Simulated is not real
         </h2>

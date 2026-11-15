@@ -189,7 +189,7 @@ export function LivePositionWatch({ network, onFill }: LivePositionWatchProps) {
       : null;
 
   return (
-    <div className="flex flex-col gap-3 border border-hairline bg-background p-3">
+    <div className="flex flex-col gap-3 rounded-xl border border-hairline bg-surface p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
           Live position watch · {network.label}
@@ -211,7 +211,7 @@ export function LivePositionWatch({ network, onFill }: LivePositionWatchProps) {
             value={addressInput}
             onChange={(e) => setAddressInput(e.target.value)}
             placeholder="0x…"
-            className="tabular w-full min-w-0 border border-hairline bg-surface-strong px-3 py-2 text-sm outline-none focus-within:border-ink"
+            className="tabular w-full min-w-0 rounded-lg border border-hairline bg-surface px-3 py-2 text-sm outline-none transition-shadow focus-within:border-ink focus-within:ring-2 focus-within:ring-accent/15"
             aria-label="Public EVM address to read"
           />
           <button

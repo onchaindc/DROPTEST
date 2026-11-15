@@ -1,47 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  /* Paper — off-white research-terminal base */
-  --background: #f7f6f2;
-  --surface: #fdfdfb;
+  /* Neutral canvas + crisp white surfaces */
+  --background: #f5f7fa;
+  --surface: #ffffff;
   --surface-strong: #ffffff;
-  --hairline: #e3e0d8;
-  --ink: #16181d;
-  --ink-soft: #4a4f5a;
-  --ink-faint: #8a8d96;
-  --accent: #0f766e;   /* deep teal for verified/positive */
-  --amber: #b45309;    /* restrained warning */
-  --risk: #b91c1c;     /* restrained red risk */
-  --chart-grid: #eae7df;
+  --surface-soft: #eef2f7;
+  --hairline: #e2e8f0;
+  --ink: #0b1220;
+  --ink-soft: #475467;
+  --ink-faint: #8994a6;
+  --accent: #0f766e;
+  --accent-ink: #115e59;
+  --amber: #b45309;
+  --risk: #dc2626;
+  --chart-grid: #e8edf3;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
   --color-surface-strong: var(--surface-strong);
+  --color-surface-soft: var(--surface-soft);
   --color-hairline: var(--hairline);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-ink-faint: var(--ink-faint);
   --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
   --color-amber: var(--amber);
   --color-risk: var(--risk);
   --color-chart-grid: var(--chart-grid);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Softer, modern corner radii applied across the app */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
 }
 
 html {
   color-scheme: light;
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--ink);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Numeric readouts always render on a tabular grid for terminal feel */
+::selection {
+  background: #0f766e26;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.022em;
+}
+
+/* Numeric readouts always render on a tabular grid for a terminal feel */
 .tabular {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
@@ -55,6 +84,121 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
+}
+
+/* Range inputs: consistent modern track/thumb */
+input[type="range"] {
+  accent-color: var(--ink);
+  height: 1.25rem;
+}
+
+@layer components {
+  .card {
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    border-radius: var(--radius-xl);
+    box-shadow:
+      0 1px 2px rgba(16, 24, 40, 0.04),
+      0 12px 32px -24px rgba(16, 24, 40, 0.25);
+  }
+
+  .card-flat {
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    padding: 0.625rem 1rem;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease,
+      transform 150ms ease,
+      box-shadow 150ms ease;
+    white-space: nowrap;
+  }
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .btn-primary {
+    background: var(--ink);
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(11, 18, 32, 0.2);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #1b2436;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px -8px rgba(11, 18, 32, 0.5);
+  }
+
+  .btn-secondary {
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    border-color: #c8d2e0;
+    background: var(--surface-soft);
+  }
+
+  .btn-ghost {
+    color: var(--ink-soft);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    color: var(--ink);
+    background: var(--surface-soft);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 0.25rem 0.625rem;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .field {
+    display: flex;
+    align-items: baseline;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    padding: 0.55rem 0.75rem;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .field:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  }
+
+  .dot-grid {
+    background-image: radial-gradient(circle at 1px 1px, #0b122012 1px, transparent 0);
+    background-size: 22px 22px;
+  }
 }
 
 /* Print: keep the report clean. Recharts SVGs render fine on paper,

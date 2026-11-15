@@ -71,7 +71,7 @@ function Card({
   aside?: React.ReactNode;
 }) {
   return (
-    <section className="border border-hairline bg-surface-strong p-4 sm:p-5">
+    <section className="card p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
         {aside}
@@ -138,7 +138,7 @@ export function CostAnalysis({
       >
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-ink-soft">MUSD to borrow</span>
-          <div className="flex items-baseline border border-hairline bg-background px-3 py-2 focus-within:border-ink">
+          <div className="flex items-baseline rounded-lg border border-hairline bg-background px-3 py-2 transition-shadow focus-within:border-ink focus-within:ring-2 focus-within:ring-accent/15">
             <input
               type="number"
               inputMode="decimal"
@@ -398,7 +398,7 @@ export function CostAnalysis({
       >
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-ink-soft">MUSD redeemed</span>
-          <div className="flex items-baseline border border-hairline bg-background px-3 py-2 focus-within:border-ink">
+          <div className="flex items-baseline rounded-lg border border-hairline bg-background px-3 py-2 transition-shadow focus-within:border-ink focus-within:ring-2 focus-within:ring-accent/15">
             <input
               type="number"
               inputMode="decimal"

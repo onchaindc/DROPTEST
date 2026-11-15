@@ -63,16 +63,10 @@ export function ReportView() {
           the Scenario Studio and stay in this browser tab.
         </p>
         <div className="mt-6 flex gap-3">
-          <Link
-            href="/lab"
-            className="rounded-sm bg-ink px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-ink-soft"
-          >
+          <Link href="/lab" className="btn btn-primary px-4 py-2">
             Open the stress lab
           </Link>
-          <Link
-            href="/studio"
-            className="rounded-sm border border-hairline bg-surface-strong px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-ink"
-          >
+          <Link href="/studio" className="btn btn-secondary px-4 py-2">
             Compare scenarios
           </Link>
         </div>
@@ -183,7 +177,8 @@ function ReportContent({
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <div className="no-print mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          <p className="eyebrow">Printable report</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
             Risk report
           </h1>
           <p className="mt-2 max-w-xl text-sm text-ink-soft">
@@ -195,21 +190,21 @@ function ReportContent({
         <div className="flex gap-2">
           <Link
             href={snapshot.origin === "studio" ? "/studio" : "/lab"}
-            className="rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong"
+            className="btn btn-secondary px-3 py-2 text-[13px]"
           >
             Back to {snapshot.origin === "studio" ? "Scenario Studio" : "Stress Lab"}
           </Link>
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded-sm bg-ink px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-ink-soft"
+            className="btn btn-primary px-3.5 py-2 text-[13px]"
           >
             Print or save as PDF
           </button>
         </div>
       </div>
 
-      <article className="border border-hairline bg-surface-strong p-5 sm:p-8">
+      <article className="card p-5 sm:p-8">
         <header className="border-b border-hairline pb-4">
           <p className="text-[10px] font-medium uppercase tracking-widest text-ink-faint">
             DROPTEST hypothetical risk report
@@ -224,6 +219,14 @@ function ReportContent({
             included.
           </p>
         </header>
+
+        <div className="mt-4 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-[11px] leading-relaxed text-accent-ink">
+          <span className="font-semibold">How to read this.</span>{" "}
+          &ldquo;Liquidatable&rdquo; means the collateral ratio is below the
+          selected threshold at that price. Everything below the position inputs
+          is calculated from those numbers; any live on-chain value is labelled
+          as such.
+        </div>
 
         {/* Position inputs */}
         <section className="mt-6">

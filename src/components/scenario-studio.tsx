@@ -251,29 +251,30 @@ export function ScenarioStudio() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mb-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div className="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Scenario Studio
+          <p className="eyebrow">Scenario Studio</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Compare crash paths side by side.
           </h1>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
-            Compare up to three hypothetical price paths against the same
-            position. The math is the tested engine from the Risk Lab; the
-            scenarios themselves are drawn by you, not by the protocol.
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
+            Draw up to three price paths against the same position and see which
+            one breaches the threshold first. The math is the same tested engine
+            as the Stress Lab; the paths are your what-ifs, not predictions.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={resetAll}
-            className="rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong"
+            className="btn btn-secondary px-3 py-2 text-[13px]"
           >
-            Reset to presets
+            Reset presets
           </button>
           <button
             type="button"
             onClick={clearAll}
-            className="rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong"
+            className="btn btn-ghost px-3 py-2 text-[13px]"
           >
             Clear all
           </button>
@@ -281,7 +282,7 @@ export function ScenarioStudio() {
             type="button"
             onClick={openReport}
             disabled={!parsedFields || evaluated.length === 0}
-            className="rounded-sm bg-ink px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-primary px-3.5 py-2 text-[13px]"
           >
             Printable report
           </button>
@@ -289,7 +290,7 @@ export function ScenarioStudio() {
       </div>
 
       {/* Position inputs, shared by all paths */}
-      <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+      <section className="card mb-8 p-4 sm:p-6">
         <h2 className="mb-1 text-sm font-semibold text-ink">Shared position</h2>
         <p className="mb-5 text-xs text-ink-faint">
           Every path evaluates this same hypothetical position. Defaults match
@@ -306,7 +307,7 @@ export function ScenarioStudio() {
             <label key={key} className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-ink-soft">{label}</span>
               <div
-                className={`flex items-baseline border bg-background px-3 py-2 focus-within:border-ink ${
+                className={`flex items-baseline rounded-lg border bg-background px-3 py-2 transition-shadow focus-within:border-ink focus-within:ring-2 focus-within:ring-accent/15 ${
                   !Number.isFinite(
                     Number(String(fields[key]).replace(/,/g, "")),
                   ) ||
@@ -366,7 +367,7 @@ export function ScenarioStudio() {
       {/* Compared paths */}
       {evaluated.length > 0 && parsedFields && (
         <>
-          <section className="mb-12 border border-hairline bg-surface-strong p-4 sm:p-6">
+          <section className="card mb-8 p-4 sm:p-6">
             <div className="mb-4 flex items-baseline justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-ink">
@@ -396,11 +397,11 @@ export function ScenarioStudio() {
             />
           </section>
 
-          <section className="mb-12 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <section className="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {evaluated.map((e, pi) => (
               <div
                 key={e.stored.id}
-                className="flex flex-col border border-hairline bg-surface-strong p-4"
+                className="card flex flex-col p-4"
               >
                 <div className="flex items-center gap-2">
                   <span
@@ -417,7 +418,7 @@ export function ScenarioStudio() {
                   value={e.stored.name}
                   onChange={(ev) => setName(e.stored.id, ev.target.value)}
                   placeholder={`Path ${pi + 1} name`}
-                  className="mt-2 w-full border border-hairline bg-background px-2 py-1.5 text-sm font-medium outline-none focus:border-ink"
+                  className="mt-2 w-full rounded-md border border-hairline bg-background px-2 py-1.5 text-sm font-medium outline-none focus:border-ink"
                   aria-label={`Name of path ${pi + 1}`}
                 />
 
@@ -463,7 +464,7 @@ export function ScenarioStudio() {
                           {e.stored.stepLabel || "Step"} {si + 1}
                         </span>
                         <div
-                          className={`flex items-baseline border bg-background px-2 py-1 ${
+                          className={`flex items-baseline rounded-md border bg-background px-2 py-1 ${
                             e.invalidIndexes.includes(si) ? "border-amber/60" : "border-hairline"
                           }`}
                         >
@@ -550,7 +551,7 @@ export function ScenarioStudio() {
               <button
                 type="button"
                 onClick={addPath}
-                className="flex min-h-40 flex-col items-center justify-center gap-2 border border-dashed border-hairline bg-surface-strong p-4 text-sm text-ink-soft transition-colors hover:border-ink"
+                className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-hairline bg-surface p-4 text-sm text-ink-soft transition-colors hover:border-ink"
               >
                 <span className="text-lg">+</span>
                 Add a path ({evaluated.length} of {MAX_PATHS})

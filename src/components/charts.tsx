@@ -19,12 +19,13 @@ import {
 import { stateAtPrice, type ScenarioState } from "@/lib/engine/risk";
 import { ratio as fmtRatio, pct as fmtPct, usd } from "@/lib/format";
 
-const gridColor = "#eae7df";
-const axisStyle = { fontSize: 11, fill: "#8a8d96" } as const;
+const gridColor = "#e8edf3";
+const axisStyle = { fontSize: 11, fill: "#8994a6" } as const;
 const tooltipStyle = {
   background: "#ffffff",
-  border: "1px solid #e3e0d8",
-  borderRadius: 2,
+  border: "1px solid #e2e8f0",
+  borderRadius: 10,
+  boxShadow: "0 8px 24px -12px rgba(16,24,40,0.25)",
   fontSize: 12,
 } as const;
 

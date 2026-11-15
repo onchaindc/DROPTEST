@@ -52,7 +52,7 @@ export function RescuePanel({
   return (
     <div className="flex flex-col gap-5">
       <section className="grid gap-5 lg:grid-cols-[340px_1fr]">
-        <div className="flex flex-col border border-hairline bg-surface-strong p-4 sm:p-5">
+        <div className="card flex flex-col p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-ink">Rescue planner</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-ink-faint">
             Size the top-up before the crash, not after it. Pick a shock and a
@@ -196,7 +196,7 @@ export function RescuePanel({
           )}
         </div>
 
-        <div className="border border-hairline bg-surface-strong p-4 sm:p-5">
+        <div className="card p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-ink">Breakpoint ladder</h2>
           <p className="mt-1 text-xs leading-relaxed text-ink-soft">
             The BTC price at which this position&apos;s ratio reaches each line,
@@ -241,7 +241,7 @@ export function RescuePanel({
         </div>
       </section>
 
-      <section className="border border-hairline bg-surface-strong p-4 sm:p-5">
+      <section className="card p-4 sm:p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold text-ink">Historical replay</h2>
           <span className="rounded-full border border-hairline px-2 py-0.5 text-[10px] uppercase tracking-widest text-ink-faint">

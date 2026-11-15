@@ -114,8 +114,7 @@ const REVERSE_TARGET_MAX_PCT = 500;
 
 type TabId =
   | "position"
-  | "charts"
-  | "shocks"
+  | "stress"
   | "costs"
   | "rescue"
   | "live"
@@ -125,17 +124,13 @@ const TABS: { id: TabId; label: string; blurb: string }[] = [
   {
     id: "position",
     label: "Position",
-    blurb: "The three inputs, the threshold slider, and the headline metrics.",
+    blurb: "Your three numbers, the threshold, and the headline risk metrics.",
   },
   {
-    id: "charts",
-    label: "Charts",
-    blurb: "Collateral ratio vs price, and the staged crash timeline.",
-  },
-  {
-    id: "shocks",
-    label: "Shocks & reverse",
-    blurb: "Custom shock, preset severity ladder, and the reverse stress test.",
+    id: "stress",
+    label: "Stress tests",
+    blurb:
+      "Crash the price: a custom shock, the severity ladder, a staged timeline, reverse stress and ratio charts.",
   },
   {
     id: "costs",
@@ -151,16 +146,74 @@ const TABS: { id: TabId; label: string; blurb: string }[] = [
   },
   {
     id: "live",
-    label: "Live reads",
+    label: "Live data",
     blurb:
       "Oracle sync, read-only trove lookup by address, and live system health (TCR, MCR, fees).",
   },
   {
     id: "assumptions",
-    label: "Assumptions",
+    label: "Method",
     blurb: "What is documented, what is assumed, and where each number comes from.",
   },
 ];
+
+/** Small inline glyph per section, so the tabs read at a glance. */
+function TabGlyph({ id }: { id: TabId }) {
+  const svgProps = {
+    viewBox: "0 0 20 20",
+    "aria-hidden": true,
+    className: "h-3.5 w-3.5",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.6,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  switch (id) {
+    case "position":
+      return (
+        <svg {...svgProps}>
+          <path d="M3.5 6.5h13M3.5 13.5h13" />
+          <circle cx="8" cy="6.5" r="2" />
+          <circle cx="13" cy="13.5" r="2" />
+        </svg>
+      );
+    case "stress":
+      return (
+        <svg {...svgProps}>
+          <path d="M11 2.5 4.5 11h4.8l-.8 6.5 6.9-8.5h-4.9l.5-6.5Z" />
+        </svg>
+      );
+    case "costs":
+      return (
+        <svg {...svgProps}>
+          <path d="M5 3.5h10v13l-2.5-1.8-2.5 1.8-2.5-1.8L5 16.5v-13Z" />
+          <path d="M8 7.5h4M8 10.5h4" />
+        </svg>
+      );
+    case "rescue":
+      return (
+        <svg {...svgProps}>
+          <path d="M10 2.8 16 5v5c0 3.4-2.4 5.9-6 7.2-3.6-1.3-6-3.8-6-7.2V5l6-2.2Z" />
+          <path d="M7.3 9.8 9.2 11.6l3.6-3.8" />
+        </svg>
+      );
+    case "live":
+      return (
+        <svg {...svgProps}>
+          <circle cx="10" cy="13" r="1.6" />
+          <path d="M6.4 9.6a5 5 0 0 1 7.2 0M3.9 7a8.6 8.6 0 0 1 12.2 0" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...svgProps}>
+          <path d="M4 3.5h7l4 4v9H4v-13Z" />
+          <path d="M11 3.5v4h4M7 11h5M7 13.5h5" />
+        </svg>
+      );
+  }
+}
 
 function LabTabNav({
   tab,
@@ -176,7 +229,7 @@ function LabTabNav({
       <div
         role="tablist"
         aria-label="Lab sections"
-        className="flex flex-wrap gap-0.5 border-b border-hairline"
+        className="-mx-4 flex flex-wrap gap-1.5 px-4 pb-1 sm:mx-0 sm:px-0"
       >
         {TABS.map((t) => (
           <button
@@ -186,12 +239,13 @@ function LabTabNav({
             aria-selected={tab === t.id}
             data-tab={t.id}
             onClick={() => onTab(t.id)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] transition-colors ${
               tab === t.id
-                ? "border-ink font-medium text-ink"
-                : "border-transparent text-ink-soft hover:text-ink"
+                ? "bg-ink font-medium text-white shadow-[0_1px_2px_rgba(16,24,40,0.18)]"
+                : "text-ink-soft hover:bg-surface hover:text-ink"
             }`}
           >
+            <TabGlyph id={t.id} />
             {t.label}
           </button>
         ))}
@@ -209,7 +263,7 @@ function SectionMissingState({
   onOpenPosition: () => void;
 }) {
   return (
-    <div className="border border-hairline bg-surface-strong p-5 text-sm sm:p-6">
+    <div className="card p-5 text-sm sm:p-6">
       <p className="font-medium text-ink">This section needs a complete position.</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-soft">
         Switch to the{" "}
@@ -366,6 +420,25 @@ export function RiskLab() {
     }
   }, []);
 
+  /**
+   * One-click "borrow to this ratio": debt = collateral value / target.
+   * The most common starting question is "how much can I safely borrow?",
+   * so the presets answer it without requiring mental algebra.
+   */
+  const applyTargetRatio = useCallback(
+    (targetRatioPct: number) => {
+      const btc = parseField(fields.btcCollateral);
+      const price = parseField(fields.btcPriceUsd);
+      if (btc === null || price === null || targetRatioPct <= 0) return;
+      const debt = (btc * price) / (targetRatioPct / 100);
+      setFields((prev) => ({
+        ...prev,
+        musdDebt: String(Math.round(debt * 100) / 100),
+      }));
+    },
+    [fields.btcCollateral, fields.btcPriceUsd],
+  );
+
   const syncFromOracle = useCallback((priceUsd: number) => {
     setField("btcPriceUsd", String(Math.round(priceUsd * 100) / 100));
     setSpotSource("oracle");
@@ -510,15 +583,16 @@ export function RiskLab() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mb-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div className="mb-8 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Stress Lab
+          <p className="eyebrow">Stress Lab</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+            Where does this position break?
           </h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
-            A hypothetical BTC/MUSD position under price shocks. Parameters
-            follow official Mezo documentation, and nothing you enter here
-            touches a live position.
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
+            Model a BTC-backed MUSD position, crash the price, and read the exact
+            liquidation level and what is left. Hypothetical by default — nothing
+            here touches a real loan.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -526,7 +600,7 @@ export function RiskLab() {
             type="button"
             onClick={() => void copyLink()}
             disabled={!validInputs}
-            className="w-fit rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-secondary px-3 py-2 text-[13px]"
           >
             Copy link
           </button>
@@ -534,14 +608,14 @@ export function RiskLab() {
             type="button"
             onClick={exportCsv}
             disabled={!validInputs}
-            className="w-fit rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-secondary px-3 py-2 text-[13px]"
           >
             Export CSV
           </button>
           <button
             type="button"
             onClick={reset}
-            className="w-fit rounded-sm border border-hairline px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-surface-strong"
+            className="btn btn-ghost px-3 py-2 text-[13px]"
           >
             Reset
           </button>
@@ -549,7 +623,7 @@ export function RiskLab() {
             type="button"
             onClick={openReport}
             disabled={!validInputs}
-            className="w-fit rounded-sm bg-ink px-3 py-1.5 text-sm font-medium text-background transition-colors hover:bg-ink-soft disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-primary order-first px-3.5 py-2 text-[13px] sm:order-none"
           >
             Printable report
           </button>
@@ -569,7 +643,80 @@ export function RiskLab() {
         </p>
       )}
 
-      <LabTabNav tab={tab} onTab={setTab} className="mb-8 w-full max-w-3xl" />
+      {metrics && validInputs && (
+        <section className="card mb-6 overflow-hidden">
+          <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4 p-4 sm:p-5">
+            <div className="min-w-0">
+              <p className="eyebrow">Position health</p>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="tabular text-3xl font-semibold tracking-tight text-ink">
+                  {fmtRatio(metrics.collateralRatio)}
+                </span>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest ${
+                    metrics.collateralRatio < threshold / 100
+                      ? "border-risk/30 bg-risk/5 text-risk"
+                      : metrics.collateralRatio < (threshold * 1.25) / 100
+                        ? "border-amber/30 bg-amber/5 text-amber"
+                        : "border-accent/30 bg-accent/5 text-accent"
+                  }`}
+                >
+                  {metrics.collateralRatio < threshold / 100
+                    ? "Liquidatable"
+                    : metrics.collateralRatio < (threshold * 1.25) / 100
+                      ? "Thin buffer"
+                      : "Healthy"}
+                </span>
+              </div>
+              <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-ink-soft">
+                {metrics.dropToLiquidationPct > 0 ? (
+                  <>
+                    A {fmtPct(metrics.dropToLiquidationPct)} fall in BTC — to{" "}
+                    <span className="tabular text-ink">
+                      {usd(metrics.liquidationPriceUsd, 0)}
+                    </span>{" "}
+                    — puts this position below the {threshold}% line.
+                  </>
+                ) : (
+                  <>
+                    Already below the {threshold}% line at this price. Add
+                    collateral or repay debt to get back above it.
+                  </>
+                )}{" "}
+                {spotSource === "oracle" ? "Price synced from the Mezo oracle." : "Price entered by hand."}
+              </p>
+            </div>
+            <dl className="grid grid-cols-3 gap-x-6 gap-y-2">
+              {[
+                ["Collateral", usd(metrics.collateralValueUsd, 0)],
+                ["Debt", usd(validInputs.musdDebt, 0)],
+                ["Liquidation", usd(metrics.liquidationPriceUsd, 0)],
+              ].map(([term, value]) => (
+                <div key={term}>
+                  <dt className="text-[10px] uppercase tracking-widest text-ink-faint">{term}</dt>
+                  <dd className="tabular mt-0.5 text-sm font-medium text-ink">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <div className="h-1.5 w-full bg-surface-soft" aria-hidden>
+            <div
+              className={`h-full transition-[width] duration-300 ${
+                metrics.collateralRatio < threshold / 100
+                  ? "bg-risk"
+                  : metrics.collateralRatio < (threshold * 1.25) / 100
+                    ? "bg-amber"
+                    : "bg-accent"
+              }`}
+              style={{
+                width: `${Math.min(100, (metrics.collateralRatio * 100) / 2.5)}%`,
+              }}
+            />
+          </div>
+        </section>
+      )}
+
+      <LabTabNav tab={tab} onTab={setTab} className="mb-6 w-full max-w-4xl" />
 
       {tab === "position" && invalidFields.length > 0 && (
         <div className="mb-8 rounded-sm border border-amber/40 bg-amber/5 px-4 py-3 text-sm text-amber">
@@ -581,13 +728,20 @@ export function RiskLab() {
 
       {tab === "position" && (
         <section className="grid gap-6 md:grid-cols-[1fr_320px]">
-        <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
+        <div className="card p-4 sm:p-6">
           <h2 className="mb-1 text-sm font-semibold text-ink">
             Hypothetical position
           </h2>
-          <p className="mb-5 text-xs text-ink-faint">
+          <p className="mb-4 text-xs text-ink-faint">
             The three numbers the whole page runs on. Nothing is sent anywhere.
           </p>
+          <div className="mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-[11px] leading-relaxed text-accent-ink">
+            <span className="font-semibold">Not sure where to start?</span>
+            <span>
+              Keep the sample, or use the ratio presets below the inputs — then
+              open <span className="font-medium">Stress tests</span>.
+            </span>
+          </div>
           <div className="grid gap-4 sm:grid-cols-3">
             {(Object.keys(fieldMeta) as FieldKey[]).map((key) => (
               <label key={key} className="flex flex-col gap-1.5">
@@ -595,7 +749,7 @@ export function RiskLab() {
                   {fieldMeta[key].label}
                 </span>
                 <div
-                  className={`flex items-baseline border bg-background px-3 py-2 focus-within:border-ink ${
+                  className={`flex items-baseline rounded-lg border bg-background px-3 py-2 transition-shadow focus-within:border-ink focus-within:ring-2 focus-within:ring-accent/15 ${
                     parsed.fields[key] === null ? "border-amber/60" : "border-hairline"
                   }`}
                 >
@@ -626,6 +780,27 @@ export function RiskLab() {
               : " entered by hand"}
           </p>
 
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-faint">
+              Borrow to a ratio
+            </span>
+            {[110, 125, 150, 200, 300].map((target) => (
+              <button
+                key={target}
+                type="button"
+                onClick={() => applyTargetRatio(target)}
+                className="rounded-full border border-hairline bg-surface px-2.5 py-1 text-[11px] tabular text-ink-soft transition-colors hover:border-ink hover:text-ink"
+                title={
+                  target === 110
+                    ? "Borrow the maximum at the documented liquidation line"
+                    : `Set debt so the collateral ratio is ${target}%`
+                }
+              >
+                {target === 110 ? "Max · 110%" : `${target}%`}
+              </button>
+            ))}
+          </div>
+
           {metrics && validInputs && (
             <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden border bg-hairline sm:grid-cols-5">
               {[
@@ -645,10 +820,37 @@ export function RiskLab() {
               ))}
             </dl>
           )}
+
+          {metrics && validInputs && (
+            <details className="mt-4 border-t border-hairline pt-3">
+              <summary className="cursor-pointer text-[11px] font-medium text-ink-soft">
+                What these numbers mean
+              </summary>
+              <ul className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-ink-soft">
+                <li>
+                  <span className="font-medium text-ink">Collateral ratio</span> —{" "}
+                  what your BTC is worth divided by what you owe. Under {threshold}% the
+                  position can be liquidated.
+                </li>
+                <li>
+                  <span className="font-medium text-ink">LTV</span> — the same thing
+                  upside down: debt divided by collateral value.
+                </li>
+                <li>
+                  <span className="font-medium text-ink">Liquidation price</span> —{" "}
+                  the BTC price where the ratio lands exactly on the threshold.
+                </li>
+                <li>
+                  <span className="font-medium text-ink">Drop to liquidation</span> —{" "}
+                  how far BTC has to fall from here to reach that price.
+                </li>
+              </ul>
+            </details>
+          )}
         </div>
 
         {/* Threshold assumption */}
-        <div className="flex flex-col gap-4 border border-hairline bg-surface-strong p-4 sm:p-6">
+        <div className="card flex flex-col gap-4 p-4 sm:p-6">
           <h2 className="text-sm font-semibold text-ink">
             Threshold you can change
           </h2>
@@ -698,9 +900,24 @@ export function RiskLab() {
         </section>
       )}
 
-      {tab === "charts" && metrics && validInputs && (
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
+      {tab === "position" && validInputs && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-hairline bg-surface px-4 py-3">
+          <p className="text-xs text-ink-soft">
+            Next: find out how far BTC can fall before this position is liquidatable.
+          </p>
+          <button
+            type="button"
+            onClick={() => setTab("stress")}
+            className="btn btn-primary px-3 py-1.5 text-xs"
+          >
+            Stress this position →
+          </button>
+        </div>
+      )}
+
+      {tab === "stress" && metrics && validInputs && (
+        <section className="mb-6 grid gap-6 lg:grid-cols-2">
+          <div className="card p-4 sm:p-6">
             <h2 className="mb-1 text-sm font-semibold text-ink">
               Collateral ratio vs BTC price
             </h2>
@@ -719,7 +936,7 @@ export function RiskLab() {
             />
           </div>
 
-          <div className="flex flex-col border border-hairline bg-surface-strong p-4 sm:p-6">
+          <div className="card flex flex-col p-4 sm:p-6">
             <div>
               <h2 className="mb-1 text-sm font-semibold text-ink">
                 Staged crash timeline
@@ -777,13 +994,9 @@ export function RiskLab() {
         </section>
       )}
 
-      {tab === "charts" && !(metrics && validInputs) && (
-        <SectionMissingState onOpenPosition={() => setTab("position")} />
-      )}
-
-      {tab === "shocks" && validInputs && (
+      {tab === "stress" && validInputs && (
         <section className="grid gap-6 lg:grid-cols-[340px_1fr]">
-          <div className="flex flex-col gap-4 border border-hairline bg-surface-strong p-4 sm:p-6">
+          <div className="card flex flex-col gap-4 p-4 sm:p-6">
             <h2 className="text-sm font-semibold text-ink">One custom shock</h2>
             <label className="flex flex-col gap-1.5">
               <span className="flex items-baseline justify-between text-xs font-medium text-ink-soft">
@@ -871,7 +1084,7 @@ export function RiskLab() {
                   step={1}
                   value={targetRatioInput}
                   onChange={(e) => setTargetRatioInput(e.target.value)}
-                  className={`tabular w-full border bg-background px-3 py-2 text-sm outline-none focus-within:border-ink ${
+                  className={`tabular w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-within:border-ink focus-within:ring-2 focus-within:ring-accent/15 ${
                     reverse !== null && "error" in reverse
                       ? "border-risk/60"
                       : "border-hairline"
@@ -923,7 +1136,7 @@ export function RiskLab() {
             </div>
           </div>
 
-          <div className="border border-hairline bg-surface-strong p-4 sm:p-6">
+          <div className="card p-4 sm:p-6">
             <h2 className="mb-1 text-sm font-semibold text-ink">
               Preset shocks
             </h2>
@@ -964,7 +1177,7 @@ export function RiskLab() {
         </section>
       )}
 
-      {tab === "shocks" && !validInputs && (
+      {tab === "stress" && !validInputs && (
         <SectionMissingState onOpenPosition={() => setTab("position")} />
       )}
 
@@ -1001,7 +1214,7 @@ export function RiskLab() {
       )}
 
       {tab === "live" && (
-        <section className="border border-hairline bg-surface-strong p-4 sm:p-6">
+        <section className="card p-4 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="mb-1 text-sm font-semibold text-ink">
@@ -1076,7 +1289,7 @@ export function RiskLab() {
       )}
 
       {tab === "assumptions" && (
-        <section className="border border-hairline bg-surface-strong p-4 sm:p-6">
+        <section className="card p-4 sm:p-6">
         <h2 className="mb-1 text-sm font-semibold text-ink">
           Assumptions and sources
         </h2>

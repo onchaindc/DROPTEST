@@ -33,9 +33,7 @@ Built for the Mezo buildathon. Strictly read-only. No wallets, no keys, no signi
 - **Mainnet is the default network** (`src/lib/mezo/verified.ts`): Mezo mainnet — chain id 31612, RPC `https://mezo-mainnet.boar.network`, explorer `explorer.mezo.org`, Skip aggregator `0x7b7c00…0015`, TroveManager proxy `0x94AfB503…93c193`, PriceFeed `0xc5aC5A88…fFcA88`, MUSD `0xdD468A1D…F186`. Testnet (31611) remains available only through an explicitly labelled network selector, so testnet data can never be mixed into a mainnet read. Every address and ABI was verified against the live chain before shipping (`node scripts/mezo-live-check.mjs`); the live check found a real active trove and confirmed `MCR()` = 1.1e18, i.e. the documented 110% per-trove threshold (with the 150% system Recovery Mode TCR kept separate).
 - **Documented protocol assumptions**: parameters pinned to official Mezo docs with inline citations; anything the docs do not state is a labelled, user-tunable assumption.
 
-## Wave 2 (what's new)
-
-Wave 2 turns the shock calculator into the full pre-borrow and pre-crash workflow. Full write-up with links: **[/updates](https://droptest-mezo.vercel.app/updates)**.
+## Capabilities
 
 - **Live system health** (`src/lib/mezo/protocol.ts`): reads `MCR()` and `getTCR(price)` from the TroveManager proxy and `borrowingRate()` / `redemptionRate()` from BorrowerOperations, then derives the Recovery Mode flag (documented 150% TCR trigger) and the redemption gate (TCR ≥ MCR). Selectors verified against `TroveManager.sol` and live mainnet (`MCR()` returned 1.1e18, rates 0.001e18 / 0.0075e18). Every failure is typed, the chain id is checked first, and the panel never shows a fabricated system ratio.
 - **Borrow cost model** (`src/lib/engine/fees.ts`): documented 0.1% issuance fee, 200 MUSD gas deposit returned on close, 0.75% redemption fee, refinance-fee conflict disclosed, and both readings of "fee paid in MUSD" (paid from proceeds vs capitalised into debt) shown side by side.
@@ -47,7 +45,7 @@ Wave 2 turns the shock calculator into the full pre-borrow and pre-crash workflo
 - **Shareable scenario links** (`src/lib/share.ts`): the position and custom shock encoded into the URL and strictly re-validated on open; a broken link falls back to the sample position.
 - **CSV risk pack** (`src/lib/export.ts`): RFC 4180-quoted export of the position, shocks, timeline, breakpoints and historical replays.
 - **Report v2** (`/report`): carries the fee schedule, interest drag, rescue plan, breakpoint ladder, liquidation split and historical replay, each recomputed from the sanitised snapshot.
-- **New lab sections**: *Costs & interest*, *Rescue & history*, and a live *System health* panel inside *Live reads* — the existing five sections are unchanged.
+- **Lab workspace**: *Position*, *Stress tests*, *Costs & interest*, *Rescue & history*, *Live data* and *Method* sections, plus a persistent position-health strip, one-click "borrow to a ratio" presets, shareable links and CSV export.
 
 ## Stack
 
@@ -74,7 +72,6 @@ npx tsc --noEmit
 - `/studio` Scenario Studio: up to three named price paths compared on one chart, with per-path lowest ratio, first threshold breach, and ending collateral value.
 - `/method` Research & Methodology: formulas, recovered documented wording, Recovery Mode distinction, liquidation mechanics, interest limitations, oracle source, and full citation list.
 - `/report` Printable report generated from the lab or studio, now including costs, interest drag, rescue sizing, breakpoints, liquidation structure and historical replay.
-- `/updates` Wave 2 update log: every new capability, what it reads or derives, and how it maps to the judging criteria.
 
 ## Not financial advice
 

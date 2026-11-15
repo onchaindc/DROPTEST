@@ -70,7 +70,7 @@ export function MezoOracleBadge({ network, onPrice, className }: OracleBadgeProp
     <div
       className={
         className ??
-        "flex flex-col gap-1 rounded-sm border border-hairline bg-surface-strong p-3"
+        "flex flex-col gap-2 rounded-xl border border-hairline bg-surface p-4"
       }
     >
       <div className="flex items-center justify-between gap-2">
